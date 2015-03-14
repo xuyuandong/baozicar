@@ -1,0 +1,17 @@
+2015-02-28 03:08:52.74 json	{'APPKEY': 'ux9LtGdElx9LpAh6FELnb2', 'content': 'fa392337-4ccb-4b32-a8c6-bdf9d169e35d', 'text': '', 'target': None, 'title': 'pool_order', 'url': '', 'ttype': 0, 'APPID': 'J1loLT0rJ7Aso2St6MxR58', 'ptype': 1}
+2015-02-28 03:08:52.74 'NoneType' object is not iterable
+2015-02-28 03:08:52.75 json	{'APPKEY': 'ux9LtGdElx9LpAh6FELnb2', 'content': '383c1d51-c45c-416a-8a9f-34a500295889', 'text': '', 'target': None, 'title': 'pool_order', 'url': '', 'ttype': 0, 'APPID': 'J1loLT0rJ7Aso2St6MxR58', 'ptype': 1}
+2015-02-28 03:08:52.75 'NoneType' object is not iterable
+2015-02-28 03:08:52.75 json	{'APPKEY': 'ux9LtGdElx9LpAh6FELnb2', 'content': 'e8c826a9-592e-4f82-96a0-149e3b029ac6', 'text': '', 'target': None, 'title': 'pool_order', 'url': '', 'ttype': 0, 'APPID': 'J1loLT0rJ7Aso2St6MxR58', 'ptype': 1}
+2015-02-28 03:08:52.76 'NoneType' object is not iterable
+2015-02-28 03:08:52.76 json	{'APPKEY': 'ux9LtGdElx9LpAh6FELnb2', 'content': '9d759819-be58-4751-8928-4a8437ae2192', 'text': '', 'target': [], 'title': 'pool_order', 'url': '', 'ttype': 0, 'APPID': 'J1loLT0rJ7Aso2St6MxR58', 'ptype': 1}
+2015-02-28 03:08:52.585 {'result': 'error'}
+2015-02-28 03:08:52.586 json	{'APPKEY': 'ux9LtGdElx9LpAh6FELnb2', 'content': '67d90115-483b-4f25-b598-98c8ba68f533', 'text': '', 'target': [], 'title': 'pool_order', 'url': '', 'ttype': 0, 'APPID': 'J1loLT0rJ7Aso2St6MxR58', 'ptype': 1}
+2015-02-28 03:08:52.846 {'result': 'error'}
+2015-02-28 03:08:52.846 json	{'APPKEY': 'ux9LtGdElx9LpAh6FELnb2', 'content': '3ad1e430-681d-4f54-91cc-84fec7c63251', 'text': '', 'target': [], 'title': 'pool_order', 'url': '', 'ttype': 0, 'APPID': 'J1loLT0rJ7Aso2St6MxR58', 'ptype': 1}
+2015-02-28 03:08:53.98 {'result': 'error'}
+2015-02-28 03:08:53.99 'NoneType' object is not callable
+2015-02-28 03:08:53.99 json	{'APPKEY': 'ux9LtGdElx9LpAh6FELnb2', 'content': '90ac391c-599e-4a18-bdd2-cab448c8d466', 'text': '', 'target': [], 'title': 'pool_order', 'url': '', 'ttype': 0, 'APPID': 'J1loLT0rJ7Aso2St6MxR58', 'ptype': 1}
+2015-02-28 03:08:53.344 {'result': 'error'}
+2015-02-28 03:08:53.344 'NoneType' object is not callable
+2015-02-28 03:08:53.345 'NoneType' object is not callable

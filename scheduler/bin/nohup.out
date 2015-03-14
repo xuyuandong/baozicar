@@ -1,0 +1,8 @@
+[7235:0228/030815:INFO:main.cc(67)] finished recovery
+[7235:0228/030815:INFO:main.cc(71)] started revoker
+[7235:0228/030815:INFO:main.cc(73)] started carpooler
+[7235:0228/030815:INFO:main.cc(75)] started dispatcher
+[7235:0228/030815:INFO:main.cc(79)] started repacker
+[7235:0228/030815:INFO:main.cc(81)] started planner
+[7238:0304/052922:INFO:dispatcher.cc(21)] push order: 1
+[7236:0304/052922:INFO:revoker.cc(16)] check order 1
