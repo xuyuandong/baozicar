@@ -267,7 +267,7 @@ class SubmitOrderHandler(BaseHandler):
     person_num = self.get_argument("person_num")
     price = self.get_argument("total_price")
 
-    pay_id = '-' #self.get_argument('pay_id')
+    pay_id = 0 #self.get_argument('pay_id')
     fact_price = 0 #self.get_argument("fact_price")
     coupon_id = '-' #self.get_argument("coupon_id")
     coupon_price = 0 #self.get_argument("coupon_price")
@@ -285,7 +285,7 @@ class SubmitOrderHandler(BaseHandler):
            from_city, from_place, to_city, to_place, num, msg,\
            pay_id, price, fact_price, coupon_id, coupon_price, dt) \
            values(%s, %s, '%s', '%s', '%s', '%s', '%s', '%s', '%s',\
-           %s, '%s', '%s', %s, %s, '%s', %s, null)"\
+           %s, '%s', %s, %s, %s, '%s', %s, null)"\
            %(table, order_type, OrderStatus.notpay, phone, name, start_time,
                from_city, from_place, to_city, to_place, person_num, extra_msg,
                pay_id, price, fact_price, coupon_id, coupon_price)
@@ -454,9 +454,9 @@ class AlipayNotifyHandler(BaseHandler):
       # insert into mysql
       table = 'cardb.t_payment'
       sql = "insert into %s \
-          (pay_id, order_id, trade_no, price, status, buyer, seller, extra_info, dt)\
-          values ('%s', '%s', '%s', %s, %s, '%s', '%s', '', null)"\
-          %(trade_no, order_id, trade_no, price, 0, buyer, seller)
+          (pay_id, order_id, price, status, buyer, seller, extra_info, dt)\
+          values (%s, %s, '%s', %s, %s, '%s', '%s', '', null)"\
+          %(trade_no, order_id, price, 0, buyer, seller)
       self.db.execute(sql)
 
       # push order to scheduler

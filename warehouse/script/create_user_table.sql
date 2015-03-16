@@ -9,7 +9,8 @@ CREATE TABLE IF NOT EXISTS t_user (
   name   VARCHAR(16) NOT NULL,
   image  VARCHAR(256) NOT NULL,
   dt     TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (id)
+  PRIMARY KEY (id),
+  INDEX (phone)
 ) ENGINE=InnoDB;
 
 
@@ -26,21 +27,21 @@ CREATE TABLE IF NOT EXISTS t_order (
   to_place    VARCHAR(255) NOT NULL,
   num         INT(2) NOT NULL,
   msg         VARCHAR(255) NOT NULL,
-  pay_id      VARCHAR(36) NOT NULL COMMENT '1.real pay_id, or 2.empty or refilled pay_id',
+  pay_id      INT(10) NOT NULL COMMENT '0 NOT PAY, refilled',
   price       INT(10) NOT NULL,
   fact_price  INT(10) NOT NULL,
   coupon_id    VARCHAR(10) NOT NULL,
   coupon_price INT(10) NOT NULL,
   last_modify TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   dt          TIMESTAMP NOT NULL DEFAULT 0,
-  PRIMARY KEY (id)
+  PRIMARY KEY (id),
+  INDEX (phone)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS t_payment (
   id           INT(10) NOT NULL AUTO_INCREMENT,
-  pay_id       VARCHAR(36) NOT NULL,
-  order_id     VARCHAR(36) NOT NULL COMMENT '1.temporary order_id, or 2.real order_id',
-  trade_no     VARCHAR(36) NOT NULL COMMENT 'theoretically same with pay_id',
+  pay_id       INT(10) NOT NULL,
+  order_id     INT(10) NOT NULL,
   price        INT(10) NOT NULL,
   status       INT(2)  NOT NULL,
   buyer        VARCHAR(32)  NOT NULL,
@@ -48,7 +49,8 @@ CREATE TABLE IF NOT EXISTS t_payment (
   extra_info   VARCHAR(255) NOT NULL,
   last_modify TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   dt          TIMESTAMP NOT NULL DEFAULT 0,
-  PRIMARY KEY (id)
+  PRIMARY KEY (id, pay_id),
+  INDEX (order_id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS t_coupon (
@@ -62,6 +64,7 @@ CREATE TABLE IF NOT EXISTS t_coupon (
   code     INT(10) NOT NULL,
   last_modify TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   dt          TIMESTAMP NOT NULL DEFAULT 0,
-  PRIMARY KEY (id)
+  PRIMARY KEY (id),
+  INDEX (phone, code)
 ) ENGINE=InnoDB;
 

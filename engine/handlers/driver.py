@@ -27,7 +27,7 @@ from ttypes import Path, Order, PoolOrder, Message
 # /login_driver
 class DriverLoginHandler(BaseHandler):
   executor = ThreadPoolExecutor(4)
-  
+
   @tornado.web.asynchronous
   @tornado.gen.coroutine
   def post(self):
@@ -49,7 +49,7 @@ class DriverLoginHandler(BaseHandler):
     # unique (phone - device) (device - pushid) mapping
     self.r.hset(options.login_rm, phone, dev_id)
     self.r.hset(options.push_rm, phone, push_id)
-   
+
     # return token
     token = self.set_secure_cookie(options.token_key, phone)
     self.write({'status_code':200, 'error_msg':'', 'token':token})
@@ -238,8 +238,10 @@ class ChangePoolOrderStatusHandler(BaseHandler):
   @base.authenticated
   def post(self):
     phone = self.current_user
-    poid = self.get_argument('poolorder_id')
     status = self.get_argument('status')
+
+    # confirm->32bit string id, else->integer id
+    poid = self.get_argument('poolorder_id')
 
     action = {
         POStatus.confirm: self.confirm,
@@ -265,14 +267,14 @@ class ChangePoolOrderStatusHandler(BaseHandler):
     # get orders from poolorder thrift object
     poolorder = PoolOrder()
     poolorder = deserialize(poolorder, postr)
-    
+
     orderids = [ str(order.id) for order in poolorder.order_list ]
     userphones = [order.phone for order in poolorder.order_list ]
     total_price = sum([order.price for order in poolorder.order_list])
 
     # try confirm
     ret = order_util.ConfirmOrder(self.r, orderids)
-    
+
     if ret is True: # success
       # from & to city
       from_city = poolorder.order_list[0].path.from_city
@@ -294,6 +296,10 @@ class ChangePoolOrderStatusHandler(BaseHandler):
           total_price, phone, from_city, to_city, ','.join(orderids))
       self.db.execute(sql)
 
+      # coupon unique id generator
+      obj = self.db.get("select last_insert_id() as id")
+      poolorder_id = obj.id
+
       # push message
       pushmsg = Message()
       pushmsg.template_type = TempType.trans
@@ -306,14 +312,14 @@ class ChangePoolOrderStatusHandler(BaseHandler):
       self.r.lpush(options.queue, thrift_obj)
 
       # return result
-      self.write({'status_code':200, 'error_msg':''})
+      self.write({'status_code':200, 'error_msg':'', 'poolorder_id':poolorder_id})
     else:
       self.write({'status_code':201, 'error_msg':'already canceled or confirmed'})
 
 
   def unfreeze(self, phone, poid):
     table = 'cardb.t_poolorder'
-    sql = "select from_city, to_city from %s where po_id='%s'"%(table, poid)
+    sql = "select from_city, to_city from %s where id=%s"%(table, poid)
     obj = self.db.get(sql)
 
     path_rpq1 = options.driver_rpq + '-'.join([obj.from_city, obj.to_city])
@@ -330,7 +336,7 @@ class ChangePoolOrderStatusHandler(BaseHandler):
 
   def ongoing(self, phone, poid):
     table = 'cardb.t_poolorder'
-    sql = "update %s set status=%s where po_id='%s'"%(table, POStatus.ongoing, poid)
+    sql = "update %s set status=%s where id=%s"%(table, POStatus.ongoing, poid)
     self.db.execute(sql)
 
     self.write({'status_code':200, 'error_msg':''})
@@ -339,11 +345,11 @@ class ChangePoolOrderStatusHandler(BaseHandler):
   def done(self, phone, poid):
     # update poolorder status
     table = 'cardb.t_poolorder'
-    sql = "update %s set status=%s where po_id='%s'"%(table, POStatus.done, poid)
+    sql = "update %s set status=%s where id=%s"%(table, POStatus.done, poid)
     self.db.execute(sql)
 
     # select orders from poolorder
-    sql = "select orders from %s where po_id='%s'"%(table, poid)
+    sql = "select orders from %s where id=%s"%(table, poid)
     obj = self.db.get(sql)
     orderids = obj.orders.split(',')
 
@@ -375,10 +381,10 @@ class ChangePoolOrderStatusHandler(BaseHandler):
   def cancel(self, phone, poid):
     table = 'cardb.t_poolorder'
 
-    sql = "update %s set status=%s where po_id='%s'"%(table, POStatus.cancel, poid)
+    sql = "update %s set status=%s where id=%s"%(table, POStatus.cancel, poid)
     self.db.execute(sql)
 
-    sql = "select orders from %s where po_id='%s'"%(table, poid)
+    sql = "select orders from %s where id=%s"%(table, poid)
     obj = self.db.get(sql)
 
     # select all sub-orders
@@ -444,16 +450,16 @@ class ReadPushedPoolOrder(BaseHandler):
     if len(postr) == 0: # failed
       self.write({'status_code':201, 'error_msg':'already canceled or confirmed'})
       return
-    
+
     # get orders from poolorder thrift object
     poolorder = PoolOrder()
     poolorder = deserialize(poolorder, postr)
-   
+
     # display info
     total_price = sum([order.price for order in poolorder.order_list])
     from_city = poolorder.order_list[0].path.from_city
     to_city = poolorder.order_list[0].path.to_city
-    
+
     order_type = poolorder.cartype
     start_time = ''
     extra_msg = ''
@@ -468,7 +474,7 @@ class ReadPushedPoolOrder(BaseHandler):
       start_time = obj.start_time
       extra_msg = obj.msg
 
-    # return result  
+    # return result
     msg = {
         'status_code':200,
         'error_msg':'',
