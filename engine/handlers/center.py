@@ -7,6 +7,7 @@ import json
 import random
 import tornado.web
 import tornado.gen
+import base
 
 from tornado.httpclient import AsyncHTTPClient, HTTPRequest
 from tornado.options import define, options

@@ -1,5 +1,3 @@
-drop database if exists cardb;
-create database cardb;
 use cardb;
 
 CREATE TABLE IF NOT EXISTS t_user (
@@ -46,6 +44,10 @@ CREATE TABLE IF NOT EXISTS t_payment (
   status       INT(2)  NOT NULL,
   buyer        VARCHAR(32)  NOT NULL,
   seller       VARCHAR(32)  NOT NULL,
+  buyer_id     VARCHAR(32)  NOT NULL,
+  seller_id    VARCHAR(32)  NOT NULL,
+  gmt_create   VARCHAR(32)  NOT NULL,
+  gmt_payment  VARCHAR(32)  NOT NULL,
   extra_info   VARCHAR(255) NOT NULL,
   last_modify TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   dt          TIMESTAMP NOT NULL DEFAULT 0,
@@ -60,6 +62,7 @@ CREATE TABLE IF NOT EXISTS t_coupon (
   price    INT(10) NOT NULL,
   within   INT(10) NOT NULL,
   deadline VARCHAR(32) NOT NULL,
+  note     VARCHAR(255) NOT NULL,
   phone    VARCHAR(16) NOT NULL,
   code     INT(10) NOT NULL,
   last_modify TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

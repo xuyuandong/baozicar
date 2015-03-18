@@ -118,8 +118,8 @@ class QueryPriceHandler(BaseHandler):
     person_num = self.get_argument('person_num')
     hour = time.localtime().tm_hour
 
-    price = int(from_dist) + int(to_dist) + person_num * 10 + hour
-
+    #price = int(from_dist) + int(to_dist) + int(person_num) * 10 + (hour)
+    price = 0.02
     msg = {
         'status_code': 200,
         'error_msg': '',
@@ -136,33 +136,26 @@ class GetCouponListHandler(BaseHandler):
   def post(self):
     phone = self.current_user
 
-    # select coupon from mysql
+    # select coupon from mysql, with expired <N days coupon
     table = 'cardb.t_coupon'
-    sql = "select id, ctype, price, limit, deadline \
-        from %s where phone='%s' and status=%s"%(table, phone, CouponStatus.normal)
+    sql = "select id, ctype, status, price, within, deadline \
+        from %s where phone='%s' and status != %s"%(table, phone, CouponStatus.used)
     obj = self.db.query(sql)
 
     # coupon list json
-    clist = [{'coupon_id':coupon.id,
-          'coupon_desc':coupon.ctype,
-          'coupon_price':coupon.price,
-          'coupon_limit':coupon.limit,
-          'coupon_deadline':coupon.deadline
+    clist = [{'coupon_id': coupon.id,
+          'coupon_desc': coupon.ctype,
+          'coupon_status': coupon.status,
+          'coupon_price': coupon.price,
+          'coupon_limit': coupon.within,
+          'coupon_deadline': coupon.deadline
           } for coupon in obj ]
 
     # return result
     msg = {
         "status_code":200,
         "coupon_num": len(obj),
-        "coupon_infos":
-        [
-          { "coupon_id":123,
-            "coupon_desc":"专车",
-            "coupon_price":20,
-            "coupon_limit":50,
-            "coupon_deadline":"2015-01-31"
-            }
-          ]
+        "coupon_infos": clist
         }
     self.write(msg)
 
@@ -324,7 +317,7 @@ class CancelOrderHandler(BaseHandler):
 
 
 # /read_confirmed_order
-class ReadConfirmedOrder(BaseHandler):
+class ReadConfirmedOrderHandler(BaseHandler):
   @base.authenticated
   def post(self): # TODO: check api
     driver = self.get_argument('driver')
@@ -414,134 +407,5 @@ class SubmitCommentHandler(BaseHandler):
   @base.authenticated
   def post(self):
     pass
-
-
-# ========================================
-# callback
-
-# /alipay_notify
-class AlipayNotifyHandler(BaseHandler):
-  def post(self):
-    data = self.get_argument('notify_data')
-    sign = self.get_argument('sign')
-
-    # verify request is securety
-    if not self.verify_sign(data, sign):
-      self.write('failed')
-      return
-
-    if not self.verify_source():
-      self.write('failed')
-      return
-
-    # parse xml notify_data
-    try:
-      root = ET.fromstring(data)
-
-      # check trade is successful
-      trade_status = root.find('trade_status').text
-      if trade_status != 'TRADE_FINISHED' or trade != 'TRADE_SUCCESS':
-        self.write('failed')
-        return
-
-      # record information
-      trade_no = root.find('trade_no').text
-      order_id = root.find('out_trade_no').text
-      buyer = root.find('buyer_email').text
-      seller = root.find('seller_email').text
-      price = root.find('total_fee').text
-
-      # insert into mysql
-      table = 'cardb.t_payment'
-      sql = "insert into %s \
-          (pay_id, order_id, price, status, buyer, seller, extra_info, dt)\
-          values (%s, %s, '%s', %s, %s, '%s', '%s', '', null)"\
-          %(trade_no, order_id, price, 0, buyer, seller)
-      self.db.execute(sql)
-
-      # push order to scheduler
-      self.process(order_id, trade_no, price)
-
-      # return result
-      self.write('success')
-
-    except Exception, e:  # parse xml exception
-      print 'error', e
-      self.write('failed')
-
-  def verify_sign(self, data, sign):
-    sign_str = build_sign("notify_data=" + data, options.alipay_pubkey)
-    if sign_str != sign:
-      return False
-    return True
-
-  def verify_source(self):
-    try:
-      notify_id = self.get_argument('notify_id')
-    except Exception, e:
-      notify_id = ''
-      print 'notify id is empty'
-    if len(notify_id) == 0:
-      return True
-
-    url = 'https://mapi.alipay.com/gateway.do'
-    params = {
-        'partner' : options.alipay.partner,
-        'notify_id' : notify_id,
-        'service' : 'notify_verify'
-        }
-
-    ret = urlopen(url, urlencode(params)).read()
-    return (ret.lower().strip() == 'true')
-
-  def build_sign(self, data, key):
-    return ''
-
-  def process(self, order_id, pay_id, fact_price):
-    # update order db with pay_id
-    table = 'cardb.t_order'
-    sql = "update %s set pay_id=%s, status=%s, fact_price=%s \
-        where id=%s"%(table, pay_id, OrderStatus.wait, fact_price, order_id)
-    self.db.execute(sql)
-
-    # select info to send
-    sql = "select order_type, status, phone, name, start_time,\
-           from_city, from_place, to_city, to_place, num, \
-           price, coupon_id, coupon_price \
-           from %s where id=%s"%(table, order_id)
-    obj = self.db.get(sql)
-
-    # mark coupon is used
-    if obj.coupon_price > 0:
-      table = 'cardb.t_coupon'
-      sql = "update %s set status=%s where id=%s"%(table, CouponStatus.used, obj.coupon_id)
-      self.db.execute(sql)
-
-    # serialize to thrift obj and send to redis
-    path = Path()
-    path.from_city = obj.from_city.encode('utf-8')
-    path.from_place = obj.from_place.encode('utf-8')
-    path.to_city = obj.to_city.encode('utf-8')
-    path.to_place = obj.to_place.encode('utf-8')
-
-    order = Order()
-    order.id = order_id
-    order.path = path
-    order.phone = obj.phone
-    order.number = int(obj.person_num)
-    order.cartype = int(obj.order_type)
-    order.price = int(obj.price)
-
-    thrift_obj = serialize(order)
-    self.r.hset(options.order_rm, order_id, thrift_obj)
-    self.r.lpush(options.order_rq, order_id)
-
-
-# /share +weixin
-class ShareHandler(BaseHandler):
-  def post(self):
-    pass
-
-
 
 

@@ -22,8 +22,7 @@ from tornado.options import define, options
 from push_util import PushUtil 
 from thrift.TSerialization import * 
 
-sys.path.append('gen-py') 
-from scheduler.ttypes import *
+from genpy.scheduler.ttypes import *
 
 
 define("host", default = "localhost", help = "")
@@ -33,15 +32,23 @@ define("queue", default = "l_message", help = "")
 define("log", default = "logs/log.", help = "")
 define("pid", default = 0, help = "process id", type = int)
 
-define("USER_APPID", default = "J1loLT0rJ7Aso2St6MxR58", help = "")
-define("USER_APPKEY", default = "ux9LtGdElx9LpAh6FELnb2", help = "")
-define("USER_APPSECRET", default = "5c1el9HOMDA0pHHDGWwKm4", help = "")
-define("USER_MASTERSECRET", default = "pgWgTuurGn9FJz5CLWMHV2", help = "")
+#define("USER_APPID", default = "J1loLT0rJ7Aso2St6MxR58", help = "")
+#define("USER_APPKEY", default = "ux9LtGdElx9LpAh6FELnb2", help = "")
+#define("USER_APPSECRET", default = "5c1el9HOMDA0pHHDGWwKm4", help = "")
+#define("USER_MASTERSECRET", default = "pgWgTuurGn9FJz5CLWMHV2", help = "")
+define("USER_APPID", default = "qlZIF87hye8ZzyifZIEMn3", help = "")
+define("USER_APPKEY", default = "WqJDqjvFPL9BBZ3NxIsNRA", help = "")
+define("USER_APPSECRET", default = "QSfgiPT5YB9W4OrNp24hc5", help = "")
+define("USER_MASTERSECRET", default = "FU1XLZGDlH9WA5u4j3nHA7", help = "")
 
-define("SERV_APPID", default = "J1loLT0rJ7Aso2St6MxR58", help = "")
-define("SERV_APPKEY", default = "ux9LtGdElx9LpAh6FELnb2", help = "")
-define("SERV_APPSECRET", default = "5c1el9HOMDA0pHHDGWwKm4", help = "")
-define("SERV_MASTERSECRET", default = "pgWgTuurGn9FJz5CLWMHV2", help = "")
+#define("SERV_APPID", default = "J1loLT0rJ7Aso2St6MxR58", help = "")
+#define("SERV_APPKEY", default = "ux9LtGdElx9LpAh6FELnb2", help = "")
+#define("SERV_APPSECRET", default = "5c1el9HOMDA0pHHDGWwKm4", help = "")
+#define("SERV_MASTERSECRET", default = "pgWgTuurGn9FJz5CLWMHV2", help = "")
+define("SERV_APPID", default = "p35rm5CQNi8ELMOKsXnhqA", help = "")
+define("SERV_APPKEY", default = "AbUz7mQ8k199NbT9yv6UB1", help = "")
+define("SERV_APPSECRET", default = "HKxtQHnZjc9yqGbH021ET4", help = "")
+define("SERV_MASTERSECRET", default = "XCfOSceoiM8lADovc9365A", help = "")
 
 #toList接口每个用户返回用户状态开关,true：打开 false：关闭
 os.environ['needDetails'] = 'true'
