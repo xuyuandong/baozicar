@@ -2,7 +2,7 @@
 import sys
 reload(sys)
 sys.setdefaultencoding('utf-8')
-    
+
 import json
 import unittest
 import tornado.testing
@@ -12,9 +12,6 @@ from tornado.httpclient import AsyncHTTPClient, HTTPRequest
 class LoginTestCase(AsyncTestCase):
   @tornado.testing.gen_test
   def test_login(self):
-    #phone='13220162344'
-    #content='尊敬的张爱琦女士，您被我公司选为幸运用户，获得价值10000元大礼包，请联系我公司客服人员领取，客服电话:18910068561。'
-    #phone = '15810750037'
     phone = '15810750037'
     content='尊敬的用户，您好！感谢您选择包子拼车，包子拼车验证码990988已发送到您手机上，美好城市绿色出行，包子拼车为您导航。'
     print content
@@ -29,11 +26,31 @@ class LoginTestCase(AsyncTestCase):
         'ext=8888']
     body = '&'.join(bodylist)
     print body
-     
+    return
     client = AsyncHTTPClient(self.io_loop)
     request = HTTPRequest(url, method='POST', body=body)
     response = yield client.fetch(request)
 
+    print response.body
+
+
+class QueryPriceTestCase(AsyncTestCase):
+  @tornado.testing.gen_test
+  def test_price(self):
+    from_place = '金码大厦'
+    from_city = '北京'
+    from_params = ['origin=%s'%(from_place),
+        'destination=%s'%(from_city),
+        'origin_region=%s'%(from_city),
+        'destination_region=%s'%(from_city)]
+
+    baidu_ak = 'ak=286e2613aa2e671c497b40cdcc5f06e7'
+    baidu_url = 'http://api.map.baidu.com/direction/v1?mode=driving&output=json&'
+    params.append(baidu_ak)
+    url = baidu_url + '&'.join(params)
+
+    client = AsyncHTTPClient(self.io_loop)
+    response = yield client.fetch(url)
     print response.body
 
 if __name__ == '__main__':

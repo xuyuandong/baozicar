@@ -16,6 +16,7 @@ define('lock_rm', default='h_lock', help='redis count map used as order mutex lo
 define('poolorder_rm', default='h_carpool', help='redis poolorder map for scheduler output')
 define('driver_rpq', default='z_driver_', help='redis zset for drivers')
 define('queue', default='l_message', help='redis queue for push message')
+define('price_rm', default='h_price', help='redis map for route price')
 
 ################# coding comment ####################################
 # status_code: 200 OK 201 Failed
