@@ -7,13 +7,16 @@ import json
 import unittest
 import tornado.testing
 from tornado.testing import AsyncTestCase
-from tornado.httpclient import AsyncHTTPClient, HTTPRequest
+from tornado.httpclient import AsyncHTTPClient, HTTPClient, HTTPRequest
 
-class LoginTestCase(AsyncTestCase):
+import urllib
+
+
+class SMSTestCase(AsyncTestCase):
   @tornado.testing.gen_test
   def test_login(self):
     phone = '15810750037'
-    content='尊敬的用户，您好！感谢您选择包子拼车，包子拼车验证码990988已发送到您手机上，美好城市绿色出行，包子拼车为您导航。'
+    content='验证码为9909'
     print content
 
     url = 'http://service2.baiwutong.com:8080/sms_send2.do'
@@ -26,7 +29,7 @@ class LoginTestCase(AsyncTestCase):
         'ext=8888']
     body = '&'.join(bodylist)
     print body
-    return
+    
     client = AsyncHTTPClient(self.io_loop)
     request = HTTPRequest(url, method='POST', body=body)
     response = yield client.fetch(request)
@@ -46,8 +49,8 @@ class QueryPriceTestCase(AsyncTestCase):
 
     baidu_ak = 'ak=286e2613aa2e671c497b40cdcc5f06e7'
     baidu_url = 'http://api.map.baidu.com/direction/v1?mode=driving&output=json&'
-    params.append(baidu_ak)
-    url = baidu_url + '&'.join(params)
+    from_params.append(baidu_ak)
+    url = baidu_url + '&'.join(from_params)
 
     client = AsyncHTTPClient(self.io_loop)
     response = yield client.fetch(url)

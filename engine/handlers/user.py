@@ -72,9 +72,6 @@ class UserLoginHandler(BaseHandler):
   @run_on_executor
   def async_bind(self, phone, push_id):
     ret1 = self.push.user.unbindAliasAll(phone)
-    #if ret1['result'].upper() != 'OK':
-    #  app_log.info('unbind %s failed'%(phone))
-    #  return False
     ret2 = self.push.user.bindAlias(phone, push_id)
     return (ret2['result'].upper() == 'OK')
 
@@ -86,46 +83,6 @@ class SaveProfileHandler(BaseHandler):
     pass
 
 
-# /query_path
-class QueryPathHandler(BaseHandler):
-  #@base.authenticated
-  def post(self): # TODO: check api
-    from_city = self.argument('from_city')
-
-    table = 'cardb.t_path'
-    sql = "select to_city from %s where from_city='%s';"%(table, from_city)
-    objlist = self.db.query(sql)
-
-    result = [ obj.to_city for obj in objlist ]
-    msg = {
-        'status_code':200,
-        'error_msg':'',
-        'to_city_list':result
-        }
-    self.write(msg)
-
-
-# /query_price
-class QueryPriceHandler(BaseHandler):
-  #@base.authenticated
-  def post(self):
-    from_city = self.get_argument('from_city')
-    to_city = self.get_argument('to_city')
-
-    from_dist = self.get_argument('from_distance')
-    to_dist = self.get_argument('to_distance')
-
-    person_num = self.get_argument('person_num')
-    hour = time.localtime().tm_hour
-
-    #price = int(from_dist) + int(to_dist) + int(person_num) * 10 + (hour)
-    price = 0.02
-    msg = {
-        'status_code': 200,
-        'error_msg': '',
-        'price': price
-        }
-    self.write(msg)
 
 # ========================================
 # user coupon

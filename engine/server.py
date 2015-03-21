@@ -31,6 +31,8 @@ class Application(tornado.web.Application):
         (r"/", HomeHandler),
         (r"/get_authcode", GetAuthCodeHandler),
         (r"/feedback", FeedbackHandler),
+        (r"/query_path", QueryPathHandler),
+        (r"/query_price", QueryPriceHandler),
         (r"/alipay_notify", AlipayNotifyHandler),
        
         (r"/test_clear_system", TestClearSystemHandler),
@@ -43,8 +45,6 @@ class Application(tornado.web.Application):
         
         (r"/login_user", UserLoginHandler),
         (r"/save_profile", SaveProfileHandler),
-        (r"/query_path", QueryPathHandler),
-        (r"/query_price", QueryPriceHandler),
         (r"/get_coupon_list", GetCouponListHandler),
         (r"/exchange_coupon", ExchangeCouponHandler),
         (r"/select_coupon", SelectCouponHandler),
