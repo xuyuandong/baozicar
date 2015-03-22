@@ -37,7 +37,7 @@ class DriverLoginHandler(BaseHandler):
     push_id = self.get_argument('push_id')
 
     # check authcode
-    if authcode != self.r.get('auth_' + phone):
+    if authcode != self.r.get(options.authcode_rpf + phone):
       self.write({"status_code":201, "error_msg":"auth code error"})
       return
 
@@ -47,8 +47,11 @@ class DriverLoginHandler(BaseHandler):
       return
 
     # unique (phone - device) (device - pushid) mapping
-    self.r.hset(options.login_rm, phone, dev_id)
-    self.r.hset(options.push_rm, phone, push_id)
+    rkey = options.driver_rpf + phone
+    pipe = self.r.pipeline(transaction=False)
+    pipe.hset(rkey, 'device', dev_id)
+    pipe.hset(rkey, 'push', push_id)
+    pipe.execute()
 
     # return token
     token = self.set_secure_cookie(options.token_key, phone)
@@ -117,10 +120,12 @@ class DriverChangeRouteHandler(BaseHandler):
 
     # update redis
     old_path_rpq = options.driver_rpq + '-'.join([to_city, from_city])
-    self.r.zrem(old_path_rpq, phone)
-
     path_rpq = options.driver_rpq + '-'.join([from_city, to_city])
-    self.r.zadd(path_rpq, obj.priority, phone)
+
+    pipe = self.r.pipeline()
+    pipe.zrem(old_path_rpq, phone)
+    pipe.zadd(path_rpq, obj.priority, phone)
+    pipe.execute()
 
     # return result
     self.write({'status':200, 'error_msg':''})
@@ -325,10 +330,10 @@ class ChangePoolOrderStatusHandler(BaseHandler):
     path_rpq1 = options.driver_rpq + '-'.join([obj.from_city, obj.to_city])
     path_rpq2 = options.driver_rpq + '-'.join([obj.to_city, obj.from_city])
 
-    ret1 = self.r.zrem(path_rpq1, phone)
-    ret2 = self.r.zrem(path_rpq2, phone)
+    pipe = self.r.pipeline(transaction=False)
+    ret = pipe.zrem(path_rpq1, phone).zrem(path_rpq2, phone).execute()
 
-    if ret1 + ret2 > 0:
+    if ret[0] + ret[1] > 0:
       self.write({'status_code':200, 'error_msg':''})
     else:
       self.write({'status_code':201, 'error_msg':'failed to unfreeze, driver is not available'})
@@ -415,8 +420,10 @@ class ChangePoolOrderStatusHandler(BaseHandler):
       order.cartype = obj.order_type
 
       thrift_obj = serialize(order)
-      self.r.hset(options.order_rm, oid, thrift_obj)
-      self.r.lpush(options.order_rq, oid)
+      pipe = self.r.pipeline()
+      pipe.hset(options.order_rm, oid, thrift_obj)
+      pipe.lpush(options.order_rq, oid)
+      pipe.execute()
 
     # put back driver to redis route set
     table = 'cardb.t_driver'

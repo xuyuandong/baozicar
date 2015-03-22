@@ -39,7 +39,7 @@ class GetAuthCodeHandler(BaseHandler):
 
     result = ''
     try:
-      self.r.set('auth_' + phone, authcode, ex = 300)
+      self.r.set(options.authcode_rpf + phone, authcode, ex = 300)
       response = yield self.sendsms(phone, authcode)
       result = response.body
     except Exception, e:
@@ -115,8 +115,8 @@ class QueryPriceHandler(BaseHandler):
         'origin_region=%s'%(from_city),
         'destination_region=%s'%(from_city)]
     from_response = yield self.direction_api(from_params)
-    from_price = self.parse_json(from_response.body)
-    if from_price < 0:
+    from_result = self.parse_json(from_response.body)
+    if len(from_result) == 0:
       self.write({'status_code':201, 'error_msg':'no result for from_place when querying baidu map'})
       return
 
@@ -126,19 +126,24 @@ class QueryPriceHandler(BaseHandler):
         'origin_region=%s'%(to_city),
         'destination_region=%s'%(to_city)]
     to_response = yield self.direction_api(to_params)
-    to_price = self.parse_json(to_response.body)
-    if to_price < 0:
+    to_result = self.parse_json(to_response.body)
+    if len(to_result) == 0:
       self.write({'status_code':201, 'error_msg':'no result for to_place when querying baidu map'})
       return
 
-    # total price
+    # calculate total price
     hour = time.localtime().tm_hour
+    from_price = from_result['baidu_price']
+    to_price = to_result['baidu_price']
     price = int(path_value) * int(person_num) + from_price + to_price
 
     msg = {
         'status_code': 200,
         'error_msg': '',
-        'price': price
+        'price': price,
+        'from_price': from_result,
+        'to_price': to_result,
+        'path_price': int(path_value)
         }
     self.write(msg)
 
@@ -147,14 +152,19 @@ class QueryPriceHandler(BaseHandler):
       jdict = json.loads(json_str)
       if jdict['status'] != 0 or jdict['type'] != 2:
         app_log.info('json status = %s, type = %s', jdict['status'], jdict['type'])
-        return -1
-      taxi = jdict['result']['taxi'] 
-      distance = int(taxi['distance'])
-      baidu_price = int(taxi['detail'][0]['total_price'])
-      return baidu_price
+        return {}
+      
+      taxi = jdict['result']['taxi']
+      result = {
+            'distance': int(taxi['distance']),
+            'duration': int(taxi['duration']),
+            'baidu_price': int(taxi['detail'][0]['total_price'])
+          }
+      return result
+
     except Exception, e:
       app_log.info('%s', e)
-      return -1
+      return {}
 
   def direction_api(self, params):
     params.append(options.baidu_api_key)

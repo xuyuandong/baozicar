@@ -45,7 +45,7 @@ class UserLoginHandler(BaseHandler):
     push_id = self.get_argument('push_id')
 
     # check authcode
-    if authcode != self.r.get('auth_' + phone):
+    if authcode != self.r.get(options.authcode_rpf + phone):
       self.write({"status_code":201, "error_msg":"auth code error"})
       return
 
@@ -55,8 +55,11 @@ class UserLoginHandler(BaseHandler):
       return
 
     # unique (phone - device) (device - pushid) mapping
-    self.r.hset(options.login_rm, phone, dev_id)
-    self.r.hset(options.push_rm, phone, push_id)
+    rkey = options.user_rpf + phone
+    pipe = self.r.pipeline(transaction=False)
+    pipe.hset(rkey, 'device', dev_id)
+    pipe.hset(rkey, 'push', push_id)
+    pipe.execute()
 
     # insert into mysql
     table = 'cardb.t_user'

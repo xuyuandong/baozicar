@@ -13,14 +13,18 @@ import json
 class TestClearSystemHandler(BaseHandler):
   def get(self):
     keys = self.r.keys('z_driver_*')
+    pipe  = self.r.pipeline(transaction=False)
     for key in keys:
-      self.r.delete(key)
-    self.r.delete('h_order')
-    self.r.delete('l_order')
-    self.r.delete('h_carpool')
-    self.r.delete('l_carpool')
-    self.r.delete('h_history_driver')
-    self.r.delete('h_lock')
+      pipe.delete(key)
+    pipe.execute()
+
+    pipe.delete('h_order')
+    pipe.delete('l_order')
+    pipe.delete('h_carpool')
+    pipe.delete('l_carpool')
+    pipe.delete('h_history_driver')
+    pipe.delete('h_lock')
+
 # /test_add_driver
 class TestAddDriverHandler(BaseHandler):
   def post(self):

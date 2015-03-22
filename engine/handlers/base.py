@@ -9,8 +9,10 @@ import uuid
 define("token_key", default="token", help="token parameter name")
 define("device_key", default="dev_id", help="device id parameter name")
 
-define("login_rm", default="login", help="redis map name for login uid-device pair")
-define("push_rm", default="push", help="redis map name for login uid-push_id pair")
+define('authcode_rpf', default='auth_', help="redis authcode key prefix as map")
+define('user_rpf', default='user_', help="redis login user profile key prefix as map")
+define('driver_rpf', default='driver_', help="redis login driver profile key prefix as map")
+
 define('order_rq', default='l_order', help='redis order list for scheduler input')
 define('order_rm', default='h_order', help='redis order map for scheduler input')
 define('lock_rm', default='h_lock', help='redis count map used as order mutex lock')
@@ -60,7 +62,10 @@ class BaseHandler(tornado.web.RequestHandler):
       value = self.get_argument(options.token_key)
       devid = self.get_argument(options.device_key)
       uid = self.get_secure_cookie(options.token_key, value, min_version=1)
-      return uid if devid == self.r.hget(options.login_rm, uid) else None
+      
+      rkey = options.user_rpf + uid
+      return uid if devid == self.r.hget(rkey, 'device') else None
+    
     except Exception, e:
       self.reqlog.error("authenticated exception: %s", e)
       return None

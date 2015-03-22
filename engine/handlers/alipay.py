@@ -52,7 +52,7 @@ class AlipayNotifyHandler(BaseHandler):
     if not self.verify():
       self.write('failed')
       return
-
+    
     # check trade is successful
     trade_status = self.get_argument('trade_status')
     if trade_status != 'TRADE_FINISHED' or trade != 'TRADE_SUCCESS':
@@ -63,7 +63,7 @@ class AlipayNotifyHandler(BaseHandler):
     trade_no = self.get_argument('trade_no')
     order_id = self.get_argument('out_trade_no')
     price = self.get_argument('total_fee')
-
+      
     buyer = self.get_argument('buyer_email')
     buyerid = self.get_argument('buyer_id')
     seller = self.get_argument('seller_email')
@@ -96,15 +96,15 @@ class AlipayNotifyHandler(BaseHandler):
       if key == 'sign' or key == 'sign_type' or len(args[key]) == 0:
         continue
       params.append( '='.join([key, args[key]]) )
-
+    
     sign = args['sign']
     pre_sign_str = '&'.join(params)
-    return self.verify_rsa(pre_sign_str, sign)
+    return self.verify_rsa(pre_sign_str, sign)  
 
   def verify_rsa(self, pre_sign_str, sign):
     hash = SHA.new(pre_sign_str)
     signature = base64ToString(sign)
-
+    
     key = RSA.importKey(self.alipay_public_key)
     verifier = PKCS1_v1_5.new(key)
     return verifier.verify(hash, signature)
@@ -112,11 +112,11 @@ class AlipayNotifyHandler(BaseHandler):
   def verify_source(self, args):
     if 'notify_id' not in args:
       return True
-
+    
     partner = options.alipay_partner
     notify_id = self.get_argument('notify_id')
-    url = options.alipay_url + 'partner=' + partner + '&notify_id=' + notify_id
-
+    url = options.alipay_url + 'partner=' + partner + '&notify_id=' + notify_id  
+    
     ret = urlopen(url).read()
     return (ret.lower().strip() == 'true')
 
@@ -157,6 +157,8 @@ class AlipayNotifyHandler(BaseHandler):
     order.price = int(obj.price)
 
     thrift_obj = serialize(order)
-    self.r.hset(options.order_rm, order_id, thrift_obj)
-    self.r.lpush(options.order_rq, order_id)
+    pipe = self.r.pipeline()
+    pipe.hset(options.order_rm, order_id, thrift_obj)
+    pipe.lpush(options.order_rq, order_id)
+    pipe.execute()
 
