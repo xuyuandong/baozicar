@@ -3,6 +3,7 @@
 from tornado.options import define, options
 import tornado.web
 import functools
+import redis
 import uuid
 
 define("token_key", default="token", help="token parameter name")
@@ -85,7 +86,7 @@ class BaseHandler(tornado.web.RequestHandler):
 
   @property
   def r(self):
-    return self.application.redis
+    return redis.Redis(connection_pool = self.application.redis)
 
 
 def authenticated(method):

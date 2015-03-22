@@ -34,7 +34,7 @@ class Application(tornado.web.Application):
         (r"/query_path", QueryPathHandler),
         (r"/query_price", QueryPriceHandler),
         (r"/alipay_notify", AlipayNotifyHandler),
-       
+
         (r"/test_clear_system", TestClearSystemHandler),
         (r"/test_add_driver", TestAddDriverHandler),
         (r"/test_insert", TestInsertHandler),
@@ -42,7 +42,7 @@ class Application(tornado.web.Application):
         (r"/test_update", TestUpdateHandler),
         (r"/test_delete", TestDeleteHandler),
         (r"/test_push", TestPushHandler),
-        
+
         (r"/login_user", UserLoginHandler),
         (r"/save_profile", SaveProfileHandler),
         (r"/get_coupon_list", GetCouponListHandler),
@@ -62,7 +62,7 @@ class Application(tornado.web.Application):
         (r"/get_poolorder_detail", GetPoolOrderDetailHandler),
         (r"/change_poolorder_status", ChangePoolOrderStatusHandler),
       ]
-    settings = dict( 
+    settings = dict(
       cookie_secret = "abcdefghijkmlnopqrstuvwxyz",
       template_path = os.path.join(os.path.dirname(__file__), "templates"),
       login_url = "/",
@@ -74,11 +74,11 @@ class Application(tornado.web.Application):
     self.log = handlers.LogUtil()
     self.push = handlers.PushUtil()
 
-    self.redis = redis.StrictRedis(
-        host=options.redis_host, 
+    self.redis = redis.ConnectionPool(
+        host=options.redis_host,
         port=options.redis_port
         )
-  
+
     self.alipay_public_key = open(options.alipay_public_key, 'r').read()
 
     tornado.web.Application.__init__(self, request_handlers, **settings)
