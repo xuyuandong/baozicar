@@ -30,6 +30,12 @@
 
 namespace base {
 
+inline int64 GetTimeInSec() {
+  struct timeval now;
+  gettimeofday(&now, NULL);
+  return static_cast<int64>(now.tv_sec);
+}
+
 inline int64 GetTimeInMs() {
   struct timeval now;
   gettimeofday(&now, NULL);

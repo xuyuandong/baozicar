@@ -41,17 +41,15 @@ class DriverLoginHandler(BaseHandler):
       self.write({"status_code":201, "error_msg":"auth code error"})
       return
 
-    # async bind push_id
-    if not ( yield self.async_bind(phone, push_id) ):
-      self.write({"status_code":201, "error_msg":"bind push_id error"})
-      return
-
-    # unique (phone - device) (device - pushid) mapping
+    # unique user profile mapping: phone -> (device, push_id)
     rkey = options.driver_rpf + phone
-    pipe = self.r.pipeline(transaction=False)
-    pipe.hset(rkey, 'device', dev_id)
-    pipe.hset(rkey, 'push', push_id)
-    pipe.execute()
+    if dev_id != self.r.hget(rkey, 'device'):
+      # async bind push_id
+      if not ( yield self.async_bind(phone, push_id) ):
+        self.write({"status_code":201, "error_msg":"bind push_id error"})
+        return
+      # device <-> push_id is one one mapping 
+      self.r.hmset(rkey, {'device':dev_id, 'push':push_id})
 
     # return token
     token = self.set_secure_cookie(options.token_key, phone)
@@ -275,7 +273,7 @@ class ChangePoolOrderStatusHandler(BaseHandler):
 
     orderids = [ str(order.id) for order in poolorder.order_list ]
     userphones = [order.phone for order in poolorder.order_list ]
-    total_price = sum([order.price for order in poolorder.order_list])
+    total_price = poolorder.subsidy + sum([order.price for order in poolorder.order_list])
 
     # try confirm
     ret = order_util.ConfirmOrder(self.r, orderids)
@@ -295,10 +293,11 @@ class ChangePoolOrderStatusHandler(BaseHandler):
       # insert poolorder into mysql
       table = 'cardb.t_poolorder'
       sql = "insert into %s \
-          (po_id, po_type, status, price, phone, from_city, to_city, orders, dt) \
-          values('%s', %s, %s, %s, '%s', '%s', '%s', '%s', null)"\
+          (po_id, po_type, status, price, phone, from_city, to_city, orders, subsidy, sstype, dt) \
+          values('%s', %s, %s, %s, '%s', '%s', '%s', '%s', %s, %s, null)"\
           %(table, poid, poolorder.cartype, status,
-          total_price, phone, from_city, to_city, ','.join(orderids))
+          total_price, phone, from_city, to_city, ','.join(orderids),
+          poolorder.subsidy, poolorder.sstype)
       self.db.execute(sql)
 
       # coupon unique id generator
@@ -395,7 +394,7 @@ class ChangePoolOrderStatusHandler(BaseHandler):
     # select all sub-orders
     orderids = obj.orders.split(',')
     table = 'cardb.t_order'
-    sqls = ["select id, order_type, phone, from_city, to_city, from_place, to_place, num, price\
+    sqls = ["select id, order_type, phone, from_city, to_city, from_place, to_place, num, price, dt \
           from %s where id=%s"%(table, oid) for oid in orderids ]
 
     sql = " union all ".join(sqls) if len(orderids) > 1 else sqls[0]
@@ -418,6 +417,10 @@ class ChangePoolOrderStatusHandler(BaseHandler):
       order.phone = obj.phone
       order.number = obj.num
       order.cartype = obj.order_type
+
+      #dtstr = obj.dt.strftime("%Y-%m-%d %H:%M:%S"),
+      #dtarray = time.strptime(dtstr, "%Y-%m-%d %H:%M:%S")
+      order.time = int(time.mktime(obj.dt))
 
       thrift_obj = serialize(order)
       pipe = self.r.pipeline()
@@ -463,7 +466,8 @@ class ReadPushedPoolOrder(BaseHandler):
     poolorder = deserialize(poolorder, postr)
 
     # display info
-    total_price = sum([order.price for order in poolorder.order_list])
+    is_subsidy = poolorder.sstype
+    total_price = poolorder.subsidy + sum([order.price for order in poolorder.order_list])
     from_city = poolorder.order_list[0].path.from_city
     to_city = poolorder.order_list[0].path.to_city
 
@@ -490,7 +494,8 @@ class ReadPushedPoolOrder(BaseHandler):
         'to_city': to_city,
         'order_type': order_type,
         'start_time': start_time,
-        'extra_msg': extra_msg
+        'extra_msg': extra_msg,
+        'subsidy': poolorder.subsidy
         }
     self.write(msg)
 

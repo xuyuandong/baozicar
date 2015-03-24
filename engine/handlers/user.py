@@ -43,23 +43,26 @@ class UserLoginHandler(BaseHandler):
     authcode = self.get_argument("authcode")
     dev_id = self.get_argument("dev_id")
     push_id = self.get_argument('push_id')
+    app_log.info('->%s', time.time())
 
     # check authcode
     if authcode != self.r.get(options.authcode_rpf + phone):
       self.write({"status_code":201, "error_msg":"auth code error"})
       return
+    app_log.info('->%s', time.time())
 
-    # async bind push_id
-    if not ( yield self.async_bind(phone, push_id) ):
-      self.write({"status_code":201, "error_msg":"bind push_id error"})
-      return
-
-    # unique (phone - device) (device - pushid) mapping
+    # unique user profile mapping: phone -> (device, push_id)
     rkey = options.user_rpf + phone
-    pipe = self.r.pipeline(transaction=False)
-    pipe.hset(rkey, 'device', dev_id)
-    pipe.hset(rkey, 'push', push_id)
-    pipe.execute()
+    if dev_id != self.r.hget(rkey, 'device'):
+      # async bind push_id
+      if not ( yield self.async_bind(phone, push_id) ):
+        self.write({"status_code":201, "error_msg":"bind push_id error"})
+        return
+
+      # device <-> push_id is one one mapping 
+      self.r.hmset(rkey, {'device':dev_id, 'push':push_id})
+      app_log.info('->%s', time.time())
+
 
     # insert into mysql
     table = 'cardb.t_user'
@@ -67,6 +70,7 @@ class UserLoginHandler(BaseHandler):
         values ('%s', '%s', '', '') \
         on duplicate key update dev='%s'"%(table, phone, dev_id, dev_id)
     self.db.execute(sql)
+    app_log.info('->%s', time.time())
 
     # return token
     token = self.set_secure_cookie(options.token_key, phone)
@@ -154,17 +158,18 @@ class ExchangeCouponHandler(BaseHandler):
     table = 'cardb.t_coupon'
     sql = "select id from %s where phone=%s and code=%s limit 1;"%(table, phone, code)
     obj = self.db.get(sql)
-    if obj.id is not None:
+    if obj is not None:
       msg = {
           'status_code' : 200,
           'error_msg' : '',
           'coupon_info': {
             'coupon_id': obj.id,
-            'coupon_desc' : '',
+            'coupon_desc' : coupon['note'],
             'coupon_price' : coupon['price'],
-            'coupon_limit' : coupon['limit'],
+            'coupon_limit' : coupon['within'],
             'coupon_deadline': coupon['deadline'],
-            }
+            },
+          'is_new': False
           }
       self.write(msg)
       return
@@ -176,10 +181,10 @@ class ExchangeCouponHandler(BaseHandler):
       return
 
     # insert into mysql db
-    sql = "insert into %s (ctype, status, price, within, deadline, phone, code, dt) \
-        values(%s, %s, %s, %s, '%s', '%s', %s, null)" \
+    sql = "insert into %s (ctype, status, price, within, deadline, note, phone, code, dt) \
+        values(%s, %s, %s, %s, '%s', '%s', '%s', %s, null)" \
         %(table, coupon['ctype'], CouponStatus.normal, \
-        coupon['price'], coupon['limit'], coupon['deadline'], phone, code)
+        coupon['price'], coupon['within'], coupon['deadline'], coupon['note'], phone, code)
     self.db.execute(sql)
 
     # coupon unique id generator
@@ -191,11 +196,12 @@ class ExchangeCouponHandler(BaseHandler):
         'error_msg' : '',
         'coupon_info': {
           'coupon_id': coupon_id,
-          'coupon_desc' : '',
+          'coupon_desc' : coupon['note'],
           'coupon_price' : coupon['price'],
-          'coupon_limit' : coupon['limit'],
+          'coupon_limit' : coupon['within'],
           'coupon_deadline': coupon['deadline'],
-          }
+          },
+        'is_new': True
         }
     self.write(msg)
 

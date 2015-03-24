@@ -6,6 +6,7 @@ import tornado.gen
 import json
 import base
 
+from tornado.httpclient import AsyncHTTPClient, HTTPRequest
 from tornado.concurrent import run_on_executor
 from tornado.options import define, options
 from tornado.log import app_log
@@ -47,15 +48,30 @@ def base64ToString(s):
 
 # /alipay_notify
 class AlipayNotifyHandler(BaseHandler):
+  @tornado.web.asynchronous
+  @tornado.gen.coroutine
   def post(self):
-    # verify request is securety
-    if not self.verify():
-      self.write('failed')
-      return
-    
-    # check trade is successful
-    trade_status = self.get_argument('trade_status')
-    if trade_status != 'TRADE_FINISHED' or trade != 'TRADE_SUCCESS':
+    args = self.request.arguments
+    try:
+      # check trade is successful
+      trade_status = self.get_argument('trade_status')
+      if trade_status != 'TRADE_FINISHED' and trade != 'TRADE_SUCCESS':
+        app_log.info('trade status: %s', trade_status)
+        self.write('failed')
+        return
+      # verify request is securety
+      if not self.verify_sign(args):
+        app_log.info('failed to check signature')
+        self.write('failed')
+        return
+      # verify notify coming source
+      source = yield self.verify_source()
+      if source.body.lower().strip() != 'true':
+        app_log.info('failed to check notify_id')
+        self.write('failed')
+        return
+    except Exception, e:
+      app_log.info('exception:%s', e)
       self.write('failed')
       return
 
@@ -86,18 +102,14 @@ class AlipayNotifyHandler(BaseHandler):
     self.write('success')
 
 
-  def verify(self):
-    args = self.request.arguments
-    return self.verify_sign(args) and self.verify_source(args)
-
   def verify_sign(self, args):
     params = []
     for key in sorted(args):
       if key == 'sign' or key == 'sign_type' or len(args[key]) == 0:
         continue
-      params.append( '='.join([key, args[key]]) )
+      params.append( '='.join([key, args[key][0]]) )
     
-    sign = args['sign']
+    sign = args['sign'][0]
     pre_sign_str = '&'.join(params)
     return self.verify_rsa(pre_sign_str, sign)  
 
@@ -109,16 +121,13 @@ class AlipayNotifyHandler(BaseHandler):
     verifier = PKCS1_v1_5.new(key)
     return verifier.verify(hash, signature)
 
-  def verify_source(self, args):
-    if 'notify_id' not in args:
-      return True
-    
+  def verify_source(self):
     partner = options.alipay_partner
     notify_id = self.get_argument('notify_id')
     url = options.alipay_url + 'partner=' + partner + '&notify_id=' + notify_id  
     
-    ret = urlopen(url).read()
-    return (ret.lower().strip() == 'true')
+    client = AsyncHTTPClient()
+    return client.fetch(url)
 
 
   def process(self, order_id, pay_id, fact_price):
@@ -155,6 +164,7 @@ class AlipayNotifyHandler(BaseHandler):
     order.number = int(obj.person_num)
     order.cartype = int(obj.order_type)
     order.price = int(obj.price)
+    order.time = int(time.time())
 
     thrift_obj = serialize(order)
     pipe = self.r.pipeline()

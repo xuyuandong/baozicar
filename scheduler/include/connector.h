@@ -13,6 +13,11 @@ enum CarType {
   SPECIAL = 1
 };
 
+enum PoolType {
+  NORMAL = 0,
+  SUBSIDY = 1
+};
+
 class Connector : public base::Thread {
   public:
     Connector(const char* host, int port)

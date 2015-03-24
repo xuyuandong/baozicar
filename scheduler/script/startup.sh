@@ -42,11 +42,22 @@ function _show_useage()
   echo "useage: $0 {start|stop|restart}"
 }
 
+function _deploy()
+{
+  src=$WK_DIR
+  dst="/home/deploy/scheduler"
+  mkdir -p $dst
+  cp -r $src/bin $dst/
+  cp -r $src/script $dst/
+  cp -r $src/conf $dst/
+  cp -r $src/logs $dst/
+}
+
 ##
 # main
 
 case $1 in 
-  start|stop|restart)
+  deploy|start|stop|restart)
   _${1}
   ;;
   *)

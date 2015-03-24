@@ -22,6 +22,7 @@ DEFINE_string(order_rmq, "orders", "redis map queue for incoming orders");
 DEFINE_string(carpool_rmq, "carpools", "redis map queue for carpool orders");
 DEFINE_string(message_rq, "messages", "redis message queue for pushing");
 DEFINE_string(driver_rpq, "drivers", "redis zset for path-driver selection");
+DEFINE_string(path_rsm, "path", "redis zset for path-driver selection");
 DEFINE_string(history_driver_rm, "history_driver", "redis map for order - history drivers");
 
 int main(int argc, char* argv[]) {
@@ -39,6 +40,7 @@ int main(int argc, char* argv[]) {
   dispatcher.SetupOutputQueue(order_queue);
 
   Carpooler carpooler(FLAGS_host, FLAGS_port);
+  carpooler.SetupPathRedis(FLAGS_path_rsm);
   carpooler.SetupOutputRedis(FLAGS_carpool_rmq);
   carpooler.SetupQueue(order_queue, left_order_queue);
 

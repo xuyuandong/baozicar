@@ -1,8 +1,8 @@
 #ifndef _REDISPP_H_
 #define _REDISPP_H_
 
-#include <hiredis.h>
 #include <string>
+#include <hiredis/hiredis.h>
 #include "base/logging.h"
 
 namespace base {
@@ -127,6 +127,31 @@ class RedisMap {
     Redispp* r_;
     std::string hn_;
 };
+
+class RedisStructMap {
+  public:
+    RedisStructMap() : r_(NULL) {}
+    void Init(Redispp* r, const std::string& name) {
+      r_ = r;
+      hp_ = "h_" + name + "_";
+    }
+
+    redisReply* Get(const std::string& key, const std::string& structkey) {
+      std::string hkey = hp_ + key;
+      redisReply* p = r_->execute("HGET %b %b", hkey.c_str(), hkey.size(), 
+          structkey.c_str(), structkey.size());
+      if (p->type == REDIS_REPLY_NIL) {
+        freeReplyObject(p);
+        return NULL;
+      }
+      return p;
+    }
+    
+  private:
+    Redispp* r_;
+    std::string hp_;
+};
+
 
 class RedisQueue {
   public:
