@@ -55,7 +55,7 @@ class AlipayNotifyHandler(BaseHandler):
     try:
       # check trade is successful
       trade_status = self.get_argument('trade_status')
-      if trade_status != 'TRADE_FINISHED' and trade != 'TRADE_SUCCESS':
+      if trade_status != 'TRADE_FINISHED' and trade_status != 'TRADE_SUCCESS':
         app_log.info('trade status: %s', trade_status)
         self.write('failed')
         return
@@ -91,9 +91,9 @@ class AlipayNotifyHandler(BaseHandler):
     table = 'cardb.t_payment'
     sql = "insert into %s \
         (pay_id, order_id, price, status, buyer, seller, \
-        buyer_id, seller_id, gmt_create, gmt_pay, extra_info, dt)\
-        values (%s, %s, '%s', %s, %s, '%s', '%s', '%s', '%s', '%s', '%s', '', null)"\
-        %(trade_no, order_id, price, 0, buyer, seller, buyerid, sellerid, gmtc, gmtp)
+        buyer_id, seller_id, gmt_create, gmt_payment, extra_info, dt)\
+        values (%s, %s, %s, %s, '%s', '%s', '%s', '%s', '%s', '%s', '', null)"\
+        %(table, trade_no, order_id, price, 0, buyer, seller, buyerid, sellerid, gmtc, gmtp)
     self.db.execute(sql)
 
     # push order to scheduler

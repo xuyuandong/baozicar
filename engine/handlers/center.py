@@ -12,6 +12,7 @@ import tornado.gen
 from tornado.httpclient import AsyncHTTPClient, HTTPRequest
 from tornado.options import define, options
 from tornado.log import app_log
+from math import *
 
 import base
 from base import BaseHandler
@@ -93,6 +94,69 @@ class QueryPathHandler(BaseHandler):
 # /query_price
 class QueryPriceHandler(BaseHandler):
   #@base.authenticated
+  def post(self):
+    from_city = self.get_argument('from_city')
+    from_place = self.get_argument('from_place')
+    from_lat = float(self.get_argument('from_lat'))
+    from_lng = float(self.get_argument('from_lng'))
+    
+    to_city = self.get_argument('to_city')
+    to_place = self.get_argument('to_place')
+    to_lat = float(self.get_argument('to_lat'))
+    to_lng = float(self.get_argument('to_lng'))
+    
+    person_num = self.get_argument('person_num')
+
+    # get path infomation from redis
+    path = options.path_rpf + '-'.join([from_city, to_city])
+    path_obj = self.r.hgetall(path)
+    if path_obj is None:
+      self.write({'status_code':201, 'error_msg':'No information for this path in redis'})
+      return
+
+    # calculate from and to in city place distance
+    src_lat = float(path_obj['from_lat'])
+    src_lng = float(path_obj['from_lng'])
+    src_scale = float(path_obj['from_scale'])
+    from_dist = src_scale * self.calc_distance(from_lat, from_lng, src_lat, src_lng)
+    
+    dst_lat = float(path_obj['to_lat'])
+    dst_lng = float(path_obj['to_lng'])
+    dst_scale = float(path_obj['to_scale'])
+    to_dist = dst_scale * self.calc_distance(to_lat, to_lng, dst_lat, dst_lng)
+ 
+    # calculate price
+    hour = 'h%s'%(time.localtime().tm_hour)
+    hour_price = float(path_obj.get(hour, 0))
+    from_price = (from_dist - float(path_obj['from_discount'])) * float(path_obj['from_step'])
+    to_price = (to_dist - float(path_obj['to_discount'])) * float(path_obj['to_step'])
+    path_price = float(path_obj['price']) * int(person_num)
+
+    total_price = from_price + path_price + to_price + hour_price 
+
+    # result
+    msg = {
+        'status_code': 200,
+        'error_msg': '',
+        'price': total_price,
+        'from_price': from_price,
+        'to_price': to_price,
+        'path_price': path_price,
+        'hour_price': hour_price
+        }
+    self.write(msg)
+
+  def calc_distance(self, lat1, lng1, lat2, lng2):
+    lng1, lat1, lng2, lat2 = map(radians, [lng1, lat1, lng2, lat2])
+    a = lat1 - lat2
+    b = lng1 - lng2
+    s = 2 * asin( sqrt( pow( sin(a/2), 2) + cos(lat1) * cos(lat2) * pow( sin(b/2), 2) ) )
+    return s * 6378.137
+
+
+# /query_price2
+class QueryPriceHandler2(BaseHandler):
+  #@base.authenticated
   @tornado.web.asynchronous
   @tornado.gen.coroutine
   def post(self):
@@ -103,9 +167,9 @@ class QueryPriceHandler(BaseHandler):
     person_num = self.get_argument('person_num')
 
     # city 2 city price
-    path = '-'.join([from_city, to_city])
-    path_value = '1' # TODO: self.r.hget(options.price_rm, path)
-    if path_value is None:
+    path = options.path_rpf + '-'.join([from_city, to_city])
+    path_obj = self.r.hgetall(path)
+    if path_obj is None:
       self.write({'status_code':201, 'error_msg':'no price for this path in redis'})
       return
 
@@ -135,7 +199,7 @@ class QueryPriceHandler(BaseHandler):
     hour = time.localtime().tm_hour
     from_price = from_result['baidu_price']
     to_price = to_result['baidu_price']
-    price = int(path_value) * int(person_num) + from_price + to_price
+    price = path_obj['price'] * int(person_num) + from_price + to_price
 
     msg = {
         'status_code': 200,
