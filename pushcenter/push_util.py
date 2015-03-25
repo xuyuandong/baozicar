@@ -24,7 +24,8 @@ class PushUtil(object):
   def ToSingle(self, template, dst, expire = 1000*3600*12):
     target = Target()
     target.appId = template.appId
-    target.clientId = dst
+    target.alias = dst #'18603017596'#dst
+    #target.clientId = '10d9cd4fb86000ba14ee85f1f8a173a9'#dst
 
     message = IGtSingleMessage()
     message.data = template
@@ -38,7 +39,9 @@ class PushUtil(object):
     def makeTarget(id):
       t = Target()
       t.appId = template.appId
-      t.clientId = id
+      t.alias = (id)
+      #t.clientId = id
+      #t.clientId = '10d9cd4fb86000ba14ee85f1f8a173a9'#dst
       return t
     targets = [makeTarget(cid) for cid in dst]
 

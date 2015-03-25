@@ -32,19 +32,11 @@ define("queue", default = "l_message", help = "")
 define("log", default = "logs/log.", help = "")
 define("pid", default = 0, help = "process id", type = int)
 
-#define("USER_APPID", default = "J1loLT0rJ7Aso2St6MxR58", help = "")
-#define("USER_APPKEY", default = "ux9LtGdElx9LpAh6FELnb2", help = "")
-#define("USER_APPSECRET", default = "5c1el9HOMDA0pHHDGWwKm4", help = "")
-#define("USER_MASTERSECRET", default = "pgWgTuurGn9FJz5CLWMHV2", help = "")
 define("USER_APPID", default = "qlZIF87hye8ZzyifZIEMn3", help = "")
 define("USER_APPKEY", default = "WqJDqjvFPL9BBZ3NxIsNRA", help = "")
 define("USER_APPSECRET", default = "QSfgiPT5YB9W4OrNp24hc5", help = "")
 define("USER_MASTERSECRET", default = "FU1XLZGDlH9WA5u4j3nHA7", help = "")
 
-#define("SERV_APPID", default = "J1loLT0rJ7Aso2St6MxR58", help = "")
-#define("SERV_APPKEY", default = "ux9LtGdElx9LpAh6FELnb2", help = "")
-#define("SERV_APPSECRET", default = "5c1el9HOMDA0pHHDGWwKm4", help = "")
-#define("SERV_MASTERSECRET", default = "pgWgTuurGn9FJz5CLWMHV2", help = "")
 define("SERV_APPID", default = "p35rm5CQNi8ELMOKsXnhqA", help = "")
 define("SERV_APPKEY", default = "AbUz7mQ8k199NbT9yv6UB1", help = "")
 define("SERV_APPSECRET", default = "HKxtQHnZjc9yqGbH021ET4", help = "")
@@ -145,9 +137,8 @@ class PushCenter(object):
     atype = tobj.app_type
     pusher = self.pusher.get(atype)
     
-    target = tobj.target
-
     ptype = tobj.push_type
+    target = tobj.target if len(tobj.target) > 1 else tobj.target[0]
     return self.pushAction.get(ptype)(pusher, template, target)
 
   def __translate_message(self, tobj):
@@ -200,9 +191,9 @@ def main():
       msg = Message()
       msg = deserialize(msg, obj[1])
       ret = pc.push(msg)
-      pc.log.info("%s", ret)
+      pc.log.info("result %s", ret)
     except Exception, e:
-      pc.log.error("%s", e)
+      pc.log.error("exception %s", e)
 
 def test():
   po = PoolOrder()

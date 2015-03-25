@@ -42,7 +42,7 @@ class DriverLoginHandler(BaseHandler):
       return
 
     # unique user profile mapping: phone -> (device, push_id)
-    rkey = options.driver_rpf + phone
+    rkey = options.login_rpf + phone
     if dev_id != self.r.hget(rkey, 'device'):
       # async bind push_id
       if not ( yield self.async_bind(phone, push_id) ):
@@ -57,10 +57,8 @@ class DriverLoginHandler(BaseHandler):
 
   @run_on_executor
   def async_bind(self, phone, push_id):
-    ret1 = self.push.user.unbindAliasAll(phone)
-    #if ret1['result'].upper() != 'OK':
-    #  return False
-    ret2 = self.push.user.bindAlias(phone, push_id)
+    ret1 = self.push.driver.unbindAliasAll(phone)
+    ret2 = self.push.driver.bindAlias(phone, push_id)
     return (ret2['result'].upper() == 'OK')
 
 
@@ -452,7 +450,7 @@ class ChangePoolOrderStatusHandler(BaseHandler):
 
 
 # /read_pushed_poolorder
-class ReadPushedPoolOrder(BaseHandler):
+class ReadPushedPoolOrderHandler(BaseHandler):
   @base.authenticated
   def post(self):
     poid = self.get_argument('poolorder_id')

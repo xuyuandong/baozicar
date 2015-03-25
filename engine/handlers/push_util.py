@@ -15,19 +15,11 @@ from tornado.options import define, options
 #toList接口每个用户返回用户状态开关,true：打开 false：关闭
 #os.environ['needDetails'] = 'true'
 
-#define("USER_APPID", default = "J1loLT0rJ7Aso2St6MxR58", help = "")
-#define("USER_APPKEY", default = "ux9LtGdElx9LpAh6FELnb2", help = "")
-#define("USER_APPSECRET", default = "5c1el9HOMDA0pHHDGWwKm4", help = "")
-#define("USER_MASTERSECRET", default = "pgWgTuurGn9FJz5CLWMHV2", help = "")
 define("USER_APPID", default = "qlZIF87hye8ZzyifZIEMn3", help = "")
 define("USER_APPKEY", default = "WqJDqjvFPL9BBZ3NxIsNRA", help = "")
 define("USER_APPSECRET", default = "QSfgiPT5YB9W4OrNp24hc5", help = "")
 define("USER_MASTERSECRET", default = "FU1XLZGDlH9WA5u4j3nHA7", help = "")
 
-#define("SERV_APPID", default = "J1loLT0rJ7Aso2St6MxR58", help = "")
-#define("SERV_APPKEY", default = "ux9LtGdElx9LpAh6FELnb2", help = "")
-#define("SERV_APPSECRET", default = "5c1el9HOMDA0pHHDGWwKm4", help = "")
-#define("SERV_MASTERSECRET", default = "pgWgTuurGn9FJz5CLWMHV2", help = "")
 define("SERV_APPID", default = "p35rm5CQNi8ELMOKsXnhqA", help = "")
 define("SERV_APPKEY", default = "AbUz7mQ8k199NbT9yv6UB1", help = "")
 define("SERV_APPSECRET", default = "HKxtQHnZjc9yqGbH021ET4", help = "")
@@ -62,7 +54,8 @@ class Pusher(object):
   def ToSingle(self, template, cid, expire = 1000*3600*12):
     target = Target()
     target.appId = self.APPID
-    target.clientId = cid
+    target.alias = cid
+    #target.clientId = cid
 
     message = IGtSingleMessage()
     message.data = template
@@ -76,7 +69,8 @@ class Pusher(object):
     def makeTarget(id):
       t = Target()
       t.appId = self.APPID
-      t.clientId = id
+      t.alias = (id)
+      #t.clientId = id
       return t
     targets = [makeTarget(cid) for cid in cidlist]
 

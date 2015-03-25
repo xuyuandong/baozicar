@@ -61,6 +61,7 @@ class Application(tornado.web.Application):
         (r"/get_poolorder_list", GetPoolOrderListHandler),
         (r"/get_poolorder_detail", GetPoolOrderDetailHandler),
         (r"/change_poolorder_status", ChangePoolOrderStatusHandler),
+        (r"/read_pushed_poolorder", ReadPushedPoolOrderHandler),
       ]
     settings = dict(
       cookie_secret = "abcdefghijkmlnopqrstuvwxyz",

@@ -52,7 +52,7 @@ class UserLoginHandler(BaseHandler):
     app_log.info('->%s', time.time())
 
     # unique user profile mapping: phone -> (device, push_id)
-    rkey = options.user_rpf + phone
+    rkey = options.login_rpf + phone
     if dev_id != self.r.hget(rkey, 'device'):
       # async bind push_id
       if not ( yield self.async_bind(phone, push_id) ):
