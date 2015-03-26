@@ -193,6 +193,8 @@ def main():
       ret = pc.push(msg)
       pc.log.info("result %s", ret)
     except Exception, e:
+      if obj is not None:
+        r.lpush(options.queue, obj[1])
       pc.log.error("exception %s", e)
 
 def test():

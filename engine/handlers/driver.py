@@ -239,10 +239,10 @@ class ChangePoolOrderStatusHandler(BaseHandler):
   @base.authenticated
   def post(self):
     phone = self.current_user
-    status = self.get_argument('status')
 
     # confirm->32bit string id, else->integer id
     poid = self.get_argument('poolorder_id')
+    status = int(self.get_argument('status'))
 
     action = {
         POStatus.confirm: self.confirm,
@@ -252,8 +252,8 @@ class ChangePoolOrderStatusHandler(BaseHandler):
         POStatus.cancel: self.cancel
         }
     # switch status to pick method
-    if int(status) in action:
-      action.get(int(status))(phone, poid)
+    if status in action:
+      action.get(status)(phone, poid)
     else:
       self.write({'status_code':201, 'error_msg':'wrong action status'})
 
@@ -302,22 +302,41 @@ class ChangePoolOrderStatusHandler(BaseHandler):
       obj = self.db.get("select last_insert_id() as id")
       poolorder_id = obj.id
 
-      # push message
-      pushmsg = Message()
-      pushmsg.template_type = TempType.trans
-      pushmsg.push_type = PushType.many
-      pushmsg.app_type = AppType.user
-      pushmsg.title = 'poolorder'
-      pushmsg.content = phone  # driver info
-      pushmsg.target = userphones
-      thrift_obj = serialize(pushmsg)
-      self.r.lpush(options.queue, thrift_obj)
+      # change driver priority
+      self.__confirm_change_priority(phone, poolorder)
+
+      # push response message to users
+      self.__confirm_push_message(phone, userphones)
 
       # return result
       self.write({'status_code':200, 'error_msg':'', 'poolorder_id':poolorder_id})
     else:
       self.write({'status_code':201, 'error_msg':'already canceled or confirmed'})
 
+  def __confirm_change_priority(self, phone, poolorder):
+    from_city = poolorder.order_list[0].path.from_city
+    to_city = poolorder.order_list[0].path.to_city
+    
+    path = options.path_rpf + '-'.join([from_city, to_city])
+    driver_num = self.r.hget(path, 'driver_num')
+
+    for driver in poolorder.drivers:
+      if driver.phone == phone:
+        priority = driver.priority + int(driver_num)
+        table = 't_driver'
+        sql = "update %s set priority=%s where phone='%s'"%(table, driver.priority, phone)
+        self.db.execute(sql)
+
+  def __confirm_push_message(self, phone, userphones):
+    pushmsg = Message()
+    pushmsg.template_type = TempType.trans
+    pushmsg.push_type = PushType.many
+    pushmsg.app_type = AppType.user
+    pushmsg.title = 'poolorder'
+    pushmsg.content = phone  # driver info
+    pushmsg.target = userphones
+    thrift_obj = serialize(pushmsg)
+    self.r.lpush(options.queue, thrift_obj)
 
   def unfreeze(self, phone, poid):
     table = 'cardb.t_poolorder'
@@ -392,7 +411,8 @@ class ChangePoolOrderStatusHandler(BaseHandler):
     # select all sub-orders
     orderids = obj.orders.split(',')
     table = 'cardb.t_order'
-    sqls = ["select id, order_type, phone, from_city, to_city, from_place, to_place, num, price, dt \
+    sqls = ["select id, order_type, phone, from_city, to_city, from_place, to_place, \
+          num, price, from_lat, from_lng, to_lat, to_lng, dt \
           from %s where id=%s"%(table, oid) for oid in orderids ]
 
     sql = " union all ".join(sqls) if len(orderids) > 1 else sqls[0]
@@ -405,9 +425,13 @@ class ChangePoolOrderStatusHandler(BaseHandler):
 
       path = Path()
       path.from_city = obj.from_city
-      path.to_city = obj.to_city
       path.from_place = obj.from_place
+      path.to_city = obj.to_city
       path.to_place = obj.to_place
+      path.from_lat = obj.from_lat
+      path.from_lng = obj.from_lng
+      path.to_lat = obj.to_lat
+      path.to_lng = obj.to_lng
 
       order = Order()
       order.id = obj.id
@@ -421,6 +445,7 @@ class ChangePoolOrderStatusHandler(BaseHandler):
       order.time = int(time.mktime(obj.dt))
 
       thrift_obj = serialize(order)
+      
       pipe = self.r.pipeline()
       pipe.hset(options.order_rm, oid, thrift_obj)
       pipe.lpush(options.order_rq, oid)

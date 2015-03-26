@@ -43,7 +43,7 @@ def base64ToString(s):
   try:
     return base64.decodestring(s)
   except Exception, e:
-    app_log.error('base64decode:%s', e)
+    app_log.error('exception base64decode :%s', e)
     return ''
 
 # /alipay_notify
@@ -52,6 +52,8 @@ class AlipayNotifyHandler(BaseHandler):
   @tornado.gen.coroutine
   def post(self):
     args = self.request.arguments
+    self.paylog.info(args)
+
     try:
       # check trade is successful
       trade_status = self.get_argument('trade_status')
@@ -90,14 +92,18 @@ class AlipayNotifyHandler(BaseHandler):
     # insert into mysql
     table = 'cardb.t_payment'
     sql = "insert into %s \
-        (pay_id, order_id, price, status, buyer, seller, \
+        (trade_no, order_id, price, status, buyer, seller, \
         buyer_id, seller_id, gmt_create, gmt_payment, extra_info, dt)\
-        values (%s, %s, %s, %s, '%s', '%s', '%s', '%s', '%s', '%s', '', null)"\
+        values (%s, '%s', %s, %s, '%s', '%s', '%s', '%s', '%s', '%s', '', null)"\
         %(table, trade_no, order_id, price, 0, buyer, seller, buyerid, sellerid, gmtc, gmtp)
     self.db.execute(sql)
+    
+    # payment unique id generator
+    obj = self.db.get("select last_insert_id() as id")
 
     # push order to scheduler
-    self.process(order_id, trade_no, price)
+    self.process(order_id, obj.id, price)
+
     # return result
     self.write('success')
 
@@ -140,7 +146,8 @@ class AlipayNotifyHandler(BaseHandler):
     # select info to send
     sql = "select order_type, status, phone, name, start_time,\
            from_city, from_place, to_city, to_place, num, \
-           price, coupon_id, coupon_price \
+           price, coupon_id, coupon_price, \
+           from_lat, from_lng, to_lat, to_lng \
            from %s where id=%s"%(table, order_id)
     obj = self.db.get(sql)
 
@@ -157,16 +164,22 @@ class AlipayNotifyHandler(BaseHandler):
     path.to_city = obj.to_city.encode('utf-8')
     path.to_place = obj.to_place.encode('utf-8')
 
+    path.from_lat = obj.from_lat
+    path.from_lng = obj.from_lng
+    path.to_lat = obj.to_lat
+    path.to_lng = obj.to_lng
+
     order = Order()
-    order.id = order_id
+    order.id = int(order_id)
     order.path = path
     order.phone = obj.phone
-    order.number = int(obj.person_num)
+    order.number = int(obj.num)
     order.cartype = int(obj.order_type)
     order.price = int(obj.price)
     order.time = int(time.time())
 
     thrift_obj = serialize(order)
+    
     pipe = self.r.pipeline()
     pipe.hset(options.order_rm, order_id, thrift_obj)
     pipe.lpush(options.order_rq, order_id)

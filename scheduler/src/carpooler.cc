@@ -39,8 +39,8 @@ void Carpooler::Run() {
 
       // batch clustering if some path's orders could 
       if (path_count_map_[path_id] > FLAGS_batch_size) {
-        VLOG(2) << "1. batch clustering " << path_id;
-        BatchClustering(path_id, pool_vec, false);  // NOTE: will change batch_map_ and path_count_map_  
+        VLOG(2) << "batch clustering " << path_id;
+        BatchClustering(path_id, pool_vec, true);  // NOTE: will change batch_map_ and path_count_map_  
       }
 
       // mark left orders size of the path
@@ -49,6 +49,7 @@ void Carpooler::Run() {
     
       // output several times to protect poolorder vector to be too large at busy times
       if (pool_vec.size() > FLAGS_output_size) {
+        VLOG(2) << "output carpool ...";
         OutputCarpool(pool_vec);
         for (size_t i = 0; i < pool_vec.size(); ++i) {
           delete pool_vec[i]; 
@@ -62,31 +63,33 @@ void Carpooler::Run() {
     unordered_map<std::string, std::vector<Order*>* >::iterator it;
     for (it = batch_map_.begin(); it != batch_map_.end(); ++it) {
       std::string path_id = it -> first;
-      bool checktime = false;
+      bool timeout = false;
       int64_t current_time = base::GetTimeInSec() ;
 
       // check last clustering timestamp
       if (path_time_map_.find(path_id) == path_time_map_.end()) {
         path_time_map_[path_id] = current_time;
-        checktime = true;
+        timeout = true;
       } else {
         int64_t last_time = path_time_map_[path_id];
         int interval = (int)(current_time - last_time);
         if (interval > FLAGS_cluster_interval) {
           path_time_map_[path_id] = current_time;
-          checktime = true;
+          timeout = true;
         }
       }
 
-      VLOG(2) << "2. batch clustering " << it->first;
-      BatchClustering(it->first, pool_vec, checktime);  // NOTE: will change batch_map_ and path_count_map_  
+      VLOG(2) << "batch clustering " << it->first << " timeout->" << timeout;
+      BatchClustering(it->first, pool_vec, timeout);  // NOTE: will change batch_map_ and path_count_map_  
     }
 
     // process left orders, and clear batch_map_
+    VLOG(2) << "process left orders ...";
     ProcessLeftOrders(pool_vec);  // NOTE: will change batch_map_ and path_count_map_  
 
     // send carpooling result to redis queue
     if (pool_vec.size() > 0) {
+      VLOG(2) << "output carpool ...";
       OutputCarpool(pool_vec);
       for (size_t i = 0; i < pool_vec.size(); ++i) {
         delete pool_vec[i]; 
@@ -97,7 +100,7 @@ void Carpooler::Run() {
 
     // sleep
     if (in_queue_->Empty()) {
-      usleep(100000);
+      usleep(5000000);
     }
   }
 }
@@ -106,12 +109,13 @@ bool CompareOrder(const Order* o1, const Order* o2) {
   return o1->number > o2->number;
 }
 
-void Carpooler::BatchClustering(const std::string& path_id, std::vector<PoolOrder*>& pool_vec, bool checktime) {
+void Carpooler::BatchClustering(const std::string& path_id, std::vector<PoolOrder*>& pool_vec, bool timeout) {
 
   std::vector<Order*>& order_vec = *batch_map_[path_id]; // all possible orders
   std::vector<Order*> orders;  // carpooling orders
 
   // deal with special car
+  VLOG(3) << "special car clustering ...";
   for (size_t i = 0; i < order_vec.size(); ++i) {
     if (order_vec[i]->cartype == SPECIAL) {
       AddSpecialOrder(order_vec[i], pool_vec);
@@ -121,8 +125,10 @@ void Carpooler::BatchClustering(const std::string& path_id, std::vector<PoolOrde
     }
   }
 
-  // check last clustering time
-  if (!checktime) { // no need to do clustering this time
+  // check if not timeout, no need to clustering
+  if (!timeout) { 
+    VLOG(3) << "not time out, go back ...";
+    // no need to do clustering this time
     order_vec.swap(orders);
     // re-count path size
     int path_size = 0;
@@ -130,9 +136,11 @@ void Carpooler::BatchClustering(const std::string& path_id, std::vector<PoolOrde
       path_size += order_vec[i]->number;
     }
     path_count_map_[path_id] = path_size;
+    return;
   } 
 
   // deal with pooling car
+  VLOG(3) << "carpool clustering ...";
   std::sort(orders.begin(), orders.end(), CompareOrder);
 
   int head = 0, tail = orders.size();
@@ -171,7 +179,8 @@ void Carpooler::BatchClustering(const std::string& path_id, std::vector<PoolOrde
     }
   }
 
-  // keep left orders, delte carpooling orders ...
+  // keep left orders, delete carpooling orders ...
+  VLOG(3) << "keep left orders, delete carpooled orders ...";
   std::vector<Order*> left_order_vec;
   for (;head < tail;) {
     left_order_vec.push_back(orders[head++]);
@@ -224,6 +233,7 @@ void Carpooler::CheckOrSubsidyOrder(std::vector<Order*>& orders, std::vector<Poo
   std::vector<Order*> left_orders;
   
   // seperate timeout and un-timeout order
+  VLOG(3) <<  "seperate timeout and un-timeout order ";
   for (size_t i = 0; i < orders.size(); ++i) {
     int duration = (int)(current_time - orders[i]->time);
     
@@ -255,6 +265,7 @@ void Carpooler::CheckOrSubsidyOrder(std::vector<Order*>& orders, std::vector<Poo
   }
 
   // check left not timeout orders if could be clustered
+  VLOG(3) << "check left not timeout orders if could be clustered";
   for (size_t i = 0; i < left_orders.size(); ++i) {
     Order* lo = left_orders[i];
     bool match = false;
@@ -278,6 +289,7 @@ void Carpooler::CheckOrSubsidyOrder(std::vector<Order*>& orders, std::vector<Poo
   } 
 
   // write subsidy price
+  VLOG(3) <<  "write subsidy price ... ";
   for (size_t i = 0; i < ss_po_vec.size(); ++i) {
     int need = FLAGS_pool_size - ss_po_vec[i]->number;
     ss_po_vec[i]->subsidy = need * subsidy_price;
@@ -294,6 +306,7 @@ void Carpooler::ProcessLeftOrders(std::vector<PoolOrder*>& pool_vec) {
     
     if (!vec.empty()) {
       int ssprice = GetSubsidyPrice(path_id);
+      VLOG(3) << "get subsidy " << ssprice << " for " << path_id;
       if (ssprice > 0) {
         CheckOrSubsidyOrder(vec, pool_vec, ssprice);
       } else {

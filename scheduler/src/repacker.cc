@@ -24,7 +24,7 @@ void Repacker::Run() {
       pool_order = NULL;
     }
 
-    usleep(10000);
+    usleep(5000000);
   }
 
 }

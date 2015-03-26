@@ -34,8 +34,24 @@ void Path::__set_to_place(const std::string& val) {
   this->to_place = val;
 }
 
-const char* Path::ascii_fingerprint = "C93D890311F28844166CF6E571EB3AC2";
-const uint8_t Path::binary_fingerprint[16] = {0xC9,0x3D,0x89,0x03,0x11,0xF2,0x88,0x44,0x16,0x6C,0xF6,0xE5,0x71,0xEB,0x3A,0xC2};
+void Path::__set_from_lat(const double val) {
+  this->from_lat = val;
+}
+
+void Path::__set_from_lng(const double val) {
+  this->from_lng = val;
+}
+
+void Path::__set_to_lat(const double val) {
+  this->to_lat = val;
+}
+
+void Path::__set_to_lng(const double val) {
+  this->to_lng = val;
+}
+
+const char* Path::ascii_fingerprint = "245F00F9E4A5B0CEA9EB39A7B2A82616";
+const uint8_t Path::binary_fingerprint[16] = {0x24,0x5F,0x00,0xF9,0xE4,0xA5,0xB0,0xCE,0xA9,0xEB,0x39,0xA7,0xB2,0xA8,0x26,0x16};
 
 uint32_t Path::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -89,6 +105,38 @@ uint32_t Path::read(::apache::thrift::protocol::TProtocol* iprot) {
           xfer += iprot->skip(ftype);
         }
         break;
+      case 5:
+        if (ftype == ::apache::thrift::protocol::T_DOUBLE) {
+          xfer += iprot->readDouble(this->from_lat);
+          this->__isset.from_lat = true;
+        } else {
+          xfer += iprot->skip(ftype);
+        }
+        break;
+      case 6:
+        if (ftype == ::apache::thrift::protocol::T_DOUBLE) {
+          xfer += iprot->readDouble(this->from_lng);
+          this->__isset.from_lng = true;
+        } else {
+          xfer += iprot->skip(ftype);
+        }
+        break;
+      case 7:
+        if (ftype == ::apache::thrift::protocol::T_DOUBLE) {
+          xfer += iprot->readDouble(this->to_lat);
+          this->__isset.to_lat = true;
+        } else {
+          xfer += iprot->skip(ftype);
+        }
+        break;
+      case 8:
+        if (ftype == ::apache::thrift::protocol::T_DOUBLE) {
+          xfer += iprot->readDouble(this->to_lng);
+          this->__isset.to_lng = true;
+        } else {
+          xfer += iprot->skip(ftype);
+        }
+        break;
       default:
         xfer += iprot->skip(ftype);
         break;
@@ -122,6 +170,22 @@ uint32_t Path::write(::apache::thrift::protocol::TProtocol* oprot) const {
   xfer += oprot->writeString(this->to_place);
   xfer += oprot->writeFieldEnd();
 
+  xfer += oprot->writeFieldBegin("from_lat", ::apache::thrift::protocol::T_DOUBLE, 5);
+  xfer += oprot->writeDouble(this->from_lat);
+  xfer += oprot->writeFieldEnd();
+
+  xfer += oprot->writeFieldBegin("from_lng", ::apache::thrift::protocol::T_DOUBLE, 6);
+  xfer += oprot->writeDouble(this->from_lng);
+  xfer += oprot->writeFieldEnd();
+
+  xfer += oprot->writeFieldBegin("to_lat", ::apache::thrift::protocol::T_DOUBLE, 7);
+  xfer += oprot->writeDouble(this->to_lat);
+  xfer += oprot->writeFieldEnd();
+
+  xfer += oprot->writeFieldBegin("to_lng", ::apache::thrift::protocol::T_DOUBLE, 8);
+  xfer += oprot->writeDouble(this->to_lng);
+  xfer += oprot->writeFieldEnd();
+
   xfer += oprot->writeFieldStop();
   xfer += oprot->writeStructEnd();
   oprot->decrementRecursionDepth();
@@ -134,6 +198,10 @@ void swap(Path &a, Path &b) {
   swap(a.from_place, b.from_place);
   swap(a.to_city, b.to_city);
   swap(a.to_place, b.to_place);
+  swap(a.from_lat, b.from_lat);
+  swap(a.from_lng, b.from_lng);
+  swap(a.to_lat, b.to_lat);
+  swap(a.to_lng, b.to_lng);
   swap(a.__isset, b.__isset);
 }
 
@@ -142,6 +210,10 @@ Path::Path(const Path& other0) {
   from_place = other0.from_place;
   to_city = other0.to_city;
   to_place = other0.to_place;
+  from_lat = other0.from_lat;
+  from_lng = other0.from_lng;
+  to_lat = other0.to_lat;
+  to_lng = other0.to_lng;
   __isset = other0.__isset;
 }
 Path& Path::operator=(const Path& other1) {
@@ -149,6 +221,10 @@ Path& Path::operator=(const Path& other1) {
   from_place = other1.from_place;
   to_city = other1.to_city;
   to_place = other1.to_place;
+  from_lat = other1.from_lat;
+  from_lng = other1.from_lng;
+  to_lat = other1.to_lat;
+  to_lng = other1.to_lng;
   __isset = other1.__isset;
   return *this;
 }
@@ -159,6 +235,10 @@ std::ostream& operator<<(std::ostream& out, const Path& obj) {
   out << ", " << "from_place=" << to_string(obj.from_place);
   out << ", " << "to_city=" << to_string(obj.to_city);
   out << ", " << "to_place=" << to_string(obj.to_place);
+  out << ", " << "from_lat=" << to_string(obj.from_lat);
+  out << ", " << "from_lng=" << to_string(obj.from_lng);
+  out << ", " << "to_lat=" << to_string(obj.to_lat);
+  out << ", " << "to_lng=" << to_string(obj.to_lng);
   out << ")";
   return out;
 }
@@ -196,8 +276,8 @@ void Order::__set_time(const int64_t val) {
   this->time = val;
 }
 
-const char* Order::ascii_fingerprint = "EBAAE9EE1EE9A882CED301A4F3E7242A";
-const uint8_t Order::binary_fingerprint[16] = {0xEB,0xAA,0xE9,0xEE,0x1E,0xE9,0xA8,0x82,0xCE,0xD3,0x01,0xA4,0xF3,0xE7,0x24,0x2A};
+const char* Order::ascii_fingerprint = "0E95B2698AD9772974A275159CF76313";
+const uint8_t Order::binary_fingerprint[16] = {0x0E,0x95,0xB2,0x69,0x8A,0xD9,0x77,0x29,0x74,0xA2,0x75,0x15,0x9C,0xF7,0x63,0x13};
 
 uint32_t Order::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -615,7 +695,7 @@ void PoolOrder::__set_pushtime(const int64_t val) {
   this->pushtime = val;
 }
 
-void PoolOrder::__set_drivers(const std::vector<std::string> & val) {
+void PoolOrder::__set_drivers(const std::vector<Driver> & val) {
   this->drivers = val;
 }
 
@@ -631,8 +711,8 @@ void PoolOrder::__set_number(const int32_t val) {
   this->number = val;
 }
 
-const char* PoolOrder::ascii_fingerprint = "1652DB2911CE2EC814E0C7CD126F16F1";
-const uint8_t PoolOrder::binary_fingerprint[16] = {0x16,0x52,0xDB,0x29,0x11,0xCE,0x2E,0xC8,0x14,0xE0,0xC7,0xCD,0x12,0x6F,0x16,0xF1};
+const char* PoolOrder::ascii_fingerprint = "F7EEE70CFF3D3DDD7AC01476ABEC0F05";
+const uint8_t PoolOrder::binary_fingerprint[16] = {0xF7,0xEE,0xE7,0x0C,0xFF,0x3D,0x3D,0xDD,0x7A,0xC0,0x14,0x76,0xAB,0xEC,0x0F,0x05};
 
 uint32_t PoolOrder::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -709,7 +789,7 @@ uint32_t PoolOrder::read(::apache::thrift::protocol::TProtocol* iprot) {
             uint32_t _i24;
             for (_i24 = 0; _i24 < _size20; ++_i24)
             {
-              xfer += iprot->readString(this->drivers[_i24]);
+              xfer += this->drivers[_i24].read(iprot);
             }
             xfer += iprot->readListEnd();
           }
@@ -785,11 +865,11 @@ uint32_t PoolOrder::write(::apache::thrift::protocol::TProtocol* oprot) const {
 
   xfer += oprot->writeFieldBegin("drivers", ::apache::thrift::protocol::T_LIST, 5);
   {
-    xfer += oprot->writeListBegin(::apache::thrift::protocol::T_STRING, static_cast<uint32_t>(this->drivers.size()));
-    std::vector<std::string> ::const_iterator _iter26;
+    xfer += oprot->writeListBegin(::apache::thrift::protocol::T_STRUCT, static_cast<uint32_t>(this->drivers.size()));
+    std::vector<Driver> ::const_iterator _iter26;
     for (_iter26 = this->drivers.begin(); _iter26 != this->drivers.end(); ++_iter26)
     {
-      xfer += oprot->writeString((*_iter26));
+      xfer += (*_iter26).write(oprot);
     }
     xfer += oprot->writeListEnd();
   }

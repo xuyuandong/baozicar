@@ -6,7 +6,11 @@ struct Path {
   1: string from_city,
   2: string from_place,
   3: string to_city,
-  4: string to_place
+  4: string to_place,
+  5: double from_lat,
+  6: double from_lng,
+  7: double to_lat,
+  8: double to_lng
 }
 
 struct Order {
@@ -33,7 +37,7 @@ struct PoolOrder {
   2: i32 cartype,
   3: list<Order> order_list,
   4: i64 pushtime,
-  5: list<string> drivers,
+  5: list<Driver> drivers,
   6: double subsidy = 0.0,
   7: i32 sstype = 0,
   8: i32 number

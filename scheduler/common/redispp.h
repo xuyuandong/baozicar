@@ -286,6 +286,11 @@ class RedisPriorityQueue {
       return r_->execute("ZRANGE %s %d %d", zset.c_str(), start, stop);
     }
 
+    redisReply* GetWithScore(const std::string& key, int start, int stop) {
+      std::string zset = zn_ + key;
+      return r_->execute("ZRANGE %s %d %d WITHSCORES", zset.c_str(), start, stop);
+    }
+
     int Update(const std::string& key, const std::string& val, int priority) {
       ReplyObj t;
       std::string zset = zn_ + key;

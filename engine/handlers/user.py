@@ -43,13 +43,11 @@ class UserLoginHandler(BaseHandler):
     authcode = self.get_argument("authcode")
     dev_id = self.get_argument("dev_id")
     push_id = self.get_argument('push_id')
-    app_log.info('->%s', time.time())
 
     # check authcode
     if authcode != self.r.get(options.authcode_rpf + phone):
       self.write({"status_code":201, "error_msg":"auth code error"})
       return
-    app_log.info('->%s', time.time())
 
     # unique user profile mapping: phone -> (device, push_id)
     rkey = options.login_rpf + phone
@@ -61,7 +59,6 @@ class UserLoginHandler(BaseHandler):
 
       # device <-> push_id is one one mapping 
       self.r.hmset(rkey, {'device':dev_id, 'push':push_id})
-      app_log.info('->%s', time.time())
 
 
     # insert into mysql
@@ -70,7 +67,6 @@ class UserLoginHandler(BaseHandler):
         values ('%s', '%s', '', '') \
         on duplicate key update dev='%s'"%(table, phone, dev_id, dev_id)
     self.db.execute(sql)
-    app_log.info('->%s', time.time())
 
     # return token
     token = self.set_secure_cookie(options.token_key, phone)
@@ -87,6 +83,9 @@ class UserLoginHandler(BaseHandler):
 class SaveProfileHandler(BaseHandler):
   @base.authenticated
   def post(self):
+    phone = self.current_user
+    name = self.get_argument('name')
+    gender = self.get_argument('gender')
     pass
 
 
@@ -146,9 +145,9 @@ class ExchangeCouponHandler(BaseHandler):
   def post(self):
     phone = self.get_argument("phone")
     code = self.get_argument("key")
-    ckey = 'c_' + code
 
     # get coupon info
+    ckey = 'c_' + code
     coupon = self.r.hgetall(ckey)
     if not coupon:
       self.write({'status_code':201, 'error_msg':'invalid coupon'})
@@ -175,8 +174,7 @@ class ExchangeCouponHandler(BaseHandler):
       return
 
     # reduce coupon number
-    left = self.r.hincrby(ckey, 'num', -1)
-    if left < 0:
+    if 0 > self.r.hincrby(ckey, 'num', -1):
       self.write({'status_code':201, 'error_msg':'coupon exhausted'})
       return
 
@@ -226,7 +224,12 @@ class SubmitOrderHandler(BaseHandler):
     person_num = self.get_argument("person_num")
     price = self.get_argument("total_price")
 
-    pay_id = 0 #self.get_argument('pay_id')
+    from_lat = self.get_argument('from_lat')
+    from_lng = self.get_argument('from_lng')
+    to_lat = self.get_argument('to_lat')
+    to_lng = self.get_argument('to_lng')
+
+    pay_id = -1 #self.get_argument('pay_id')
     fact_price = 0 #self.get_argument("fact_price")
     coupon_id = '-' #self.get_argument("coupon_id")
     coupon_price = 0 #self.get_argument("coupon_price")
@@ -242,12 +245,14 @@ class SubmitOrderHandler(BaseHandler):
     table = 'cardb.t_order'
     sql = "insert into %s (order_type, status, phone, name, start_time,\
            from_city, from_place, to_city, to_place, num, msg,\
-           pay_id, price, fact_price, coupon_id, coupon_price, dt) \
+           pay_id, price, fact_price, coupon_id, coupon_price, \
+           from_lat, from_lng, to_lat, to_lng, dt) \
            values(%s, %s, '%s', '%s', '%s', '%s', '%s', '%s', '%s',\
-           %s, '%s', %s, %s, %s, '%s', %s, null)"\
+           %s, '%s', %s, %s, %s, '%s', %s, %s, %s, %s, %s, null)"\
            %(table, order_type, OrderStatus.notpay, phone, name, start_time,
                from_city, from_place, to_city, to_place, person_num, extra_msg,
-               pay_id, price, fact_price, coupon_id, coupon_price)
+               pay_id, price, fact_price, coupon_id, coupon_price,
+               from_lat, from_lng, to_lat, to_lng)
     self.db.execute(sql)
 
     # order unique id generator
@@ -272,7 +277,6 @@ class CancelOrderHandler(BaseHandler):
 
     if ret == 1: # success
       # will not send a canceled message, when driver confirm, get a canceled result
-
       table = 'cardb.t_order'
       sql = "update %s set status=%s where id=%s"%(table, OrderStatus.cancel, order_id)
       self.db.execute(sql)

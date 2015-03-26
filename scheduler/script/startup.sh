@@ -8,8 +8,9 @@ EXE_NAME=scheduler
 function _start() 
 {
   cd $WK_DIR/bin
-  nohup ./$EXE_NAME --flagfile=../conf/$EXE_NAME.conf & echo $! >../$EXE_NAME.pid &
-  echo "$EXE_NAME start on pid of `cat ../$EXE_NAME.pid`"
+  rm -rf $WK_DIR/bin/nohup.out
+  nohup ./$EXE_NAME --flagfile=../conf/$EXE_NAME.conf & echo $! >$WK_DIR/$EXE_NAME.pid &
+  echo "$EXE_NAME start on pid of `cat $WK_DIR/$EXE_NAME.pid`"
 }
 
 function _stop()
@@ -25,7 +26,6 @@ function _stop()
       fi
     done
     rm -rf $WK_DIR/$EXE_NAME.pid
-    rm -rf $WK_DIR/bin/nohup.out
   else
     echo "pid file not exist!"
   fi

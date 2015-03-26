@@ -1,6 +1,7 @@
 
 #include "planner.h"
 #include "base/time.h"
+#include "base/string_util.h"
 #include "order_types.h"
 
 using namespace base;
@@ -26,7 +27,7 @@ void Planner::Run() {
       }
     } 
 
-    usleep(10000);
+    usleep(2000000);
   }
 
 }
@@ -53,38 +54,58 @@ void Planner::ProcessPoolOrder(PoolOrder* pool_order) {
   
   // 1. reduce history drivers priority
   if (history_num == 1) {
+    VLOG(2) << "change priority for " << path_id;
     ChangePriority(path_id, hd.drivers);
   }
   
   // 2. fetch new drivers
   int fetch_num = std::max(history_num << 1, 1);
-  robj = driver_rpq_.Get(path_id, 0, fetch_num);
+  robj = driver_rpq_.GetWithScore(path_id, 0, fetch_num);
+  VLOG(2) << "fetch " << fetch_num << " drivers";
   
+  pool_order->drivers.clear();
   for (size_t i = 0; i < robj.Num(); ++i) {
     std::string did(robj.Ele(i)->str);
-    if (hd.drivers.find(did) == hd.drivers.end()) {
-      pool_order->drivers.push_back(did);
-    }  
+    int new_driver_index = -1;
+    
+    int priority = (i & 0x01 > 0)? StringToInt(did) : -1;
+
+    VLOG(4) << "1: did->" << did << ", priority->" << priority << ", index->" << new_driver_index;
+    if (priority < 0 && hd.drivers.find(did) == hd.drivers.end()) {
+      Driver one;
+      one.phone = did;
+      pool_order->drivers.push_back(one);
+      new_driver_index = (int)(pool_order->drivers.size() - 1);
+    }
+
+    VLOG(4) << "2: did->" << did << ", priority->" << priority << ", index->" << new_driver_index;
+    if (priority >= 0 && new_driver_index > 0) {
+      pool_order->drivers[new_driver_index].priority = priority;
+    }
   }
 
   // no new drivers available
   if (pool_order->drivers.size() == 0) {
+    VLOG(2) << "no new drivers available for " << pool_order->id;
     pool_order->pushtime = GetTimeInMs();
     queue_->Push(pool_order);
     return;
   }
    
   // send message:
+  VLOG(2) << "send message: " << pool_order->id;
   SendMessage(pool_order);
 
   // 3. record new history drivers
+  VLOG(2) << "record new history drivers for " << pool_order->id;
   for (size_t i = 0; i < pool_order->drivers.size(); ++i) {
-    hd.drivers.insert(pool_order->drivers[i]);
+    hd.drivers.insert(pool_order->drivers[i].phone);
   }
   std::string hdstr = ThriftToString(&hd);
   history_driver_rm_.Set(pool_id, hdstr);
 
   // send to re-pack queue
+  VLOG(2) << "put to repacker queue";
   pool_order->pushtime = GetTimeInMs();
   queue_->Push(pool_order);
 }
@@ -110,6 +131,10 @@ void Planner::SendMessage(const PoolOrder* pool_order) {
   
   // set message content
   msg.content = ThriftToString(pool_order);
+  for (size_t i = 0; i < pool_order->drivers.size(); ++i) {
+    VLOG(3) << "push " << pool_order->id << " to " << pool_order->drivers[i].phone;
+    msg.target.push_back(pool_order->drivers[i].phone);
+  }
 
   // put message to redis
   std::string msgbuf = ThriftToString(&msg);

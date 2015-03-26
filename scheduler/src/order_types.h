@@ -32,22 +32,26 @@ class PoolOrder;
 class Message;
 
 typedef struct _Path__isset {
-  _Path__isset() : from_city(false), from_place(false), to_city(false), to_place(false) {}
+  _Path__isset() : from_city(false), from_place(false), to_city(false), to_place(false), from_lat(false), from_lng(false), to_lat(false), to_lng(false) {}
   bool from_city :1;
   bool from_place :1;
   bool to_city :1;
   bool to_place :1;
+  bool from_lat :1;
+  bool from_lng :1;
+  bool to_lat :1;
+  bool to_lng :1;
 } _Path__isset;
 
 class Path {
  public:
 
-  static const char* ascii_fingerprint; // = "C93D890311F28844166CF6E571EB3AC2";
-  static const uint8_t binary_fingerprint[16]; // = {0xC9,0x3D,0x89,0x03,0x11,0xF2,0x88,0x44,0x16,0x6C,0xF6,0xE5,0x71,0xEB,0x3A,0xC2};
+  static const char* ascii_fingerprint; // = "245F00F9E4A5B0CEA9EB39A7B2A82616";
+  static const uint8_t binary_fingerprint[16]; // = {0x24,0x5F,0x00,0xF9,0xE4,0xA5,0xB0,0xCE,0xA9,0xEB,0x39,0xA7,0xB2,0xA8,0x26,0x16};
 
   Path(const Path&);
   Path& operator=(const Path&);
-  Path() : from_city(), from_place(), to_city(), to_place() {
+  Path() : from_city(), from_place(), to_city(), to_place(), from_lat(0), from_lng(0), to_lat(0), to_lng(0) {
   }
 
   virtual ~Path() throw();
@@ -55,6 +59,10 @@ class Path {
   std::string from_place;
   std::string to_city;
   std::string to_place;
+  double from_lat;
+  double from_lng;
+  double to_lat;
+  double to_lng;
 
   _Path__isset __isset;
 
@@ -66,6 +74,14 @@ class Path {
 
   void __set_to_place(const std::string& val);
 
+  void __set_from_lat(const double val);
+
+  void __set_from_lng(const double val);
+
+  void __set_to_lat(const double val);
+
+  void __set_to_lng(const double val);
+
   bool operator == (const Path & rhs) const
   {
     if (!(from_city == rhs.from_city))
@@ -75,6 +91,14 @@ class Path {
     if (!(to_city == rhs.to_city))
       return false;
     if (!(to_place == rhs.to_place))
+      return false;
+    if (!(from_lat == rhs.from_lat))
+      return false;
+    if (!(from_lng == rhs.from_lng))
+      return false;
+    if (!(to_lat == rhs.to_lat))
+      return false;
+    if (!(to_lng == rhs.to_lng))
       return false;
     return true;
   }
@@ -106,8 +130,8 @@ typedef struct _Order__isset {
 class Order {
  public:
 
-  static const char* ascii_fingerprint; // = "EBAAE9EE1EE9A882CED301A4F3E7242A";
-  static const uint8_t binary_fingerprint[16]; // = {0xEB,0xAA,0xE9,0xEE,0x1E,0xE9,0xA8,0x82,0xCE,0xD3,0x01,0xA4,0xF3,0xE7,0x24,0x2A};
+  static const char* ascii_fingerprint; // = "0E95B2698AD9772974A275159CF76313";
+  static const uint8_t binary_fingerprint[16]; // = {0x0E,0x95,0xB2,0x69,0x8A,0xD9,0x77,0x29,0x74,0xA2,0x75,0x15,0x9C,0xF7,0x63,0x13};
 
   Order(const Order&);
   Order& operator=(const Order&);
@@ -278,8 +302,8 @@ typedef struct _PoolOrder__isset {
 class PoolOrder {
  public:
 
-  static const char* ascii_fingerprint; // = "1652DB2911CE2EC814E0C7CD126F16F1";
-  static const uint8_t binary_fingerprint[16]; // = {0x16,0x52,0xDB,0x29,0x11,0xCE,0x2E,0xC8,0x14,0xE0,0xC7,0xCD,0x12,0x6F,0x16,0xF1};
+  static const char* ascii_fingerprint; // = "F7EEE70CFF3D3DDD7AC01476ABEC0F05";
+  static const uint8_t binary_fingerprint[16]; // = {0xF7,0xEE,0xE7,0x0C,0xFF,0x3D,0x3D,0xDD,0x7A,0xC0,0x14,0x76,0xAB,0xEC,0x0F,0x05};
 
   PoolOrder(const PoolOrder&);
   PoolOrder& operator=(const PoolOrder&);
@@ -291,7 +315,7 @@ class PoolOrder {
   int32_t cartype;
   std::vector<Order>  order_list;
   int64_t pushtime;
-  std::vector<std::string>  drivers;
+  std::vector<Driver>  drivers;
   double subsidy;
   int32_t sstype;
   int32_t number;
@@ -306,7 +330,7 @@ class PoolOrder {
 
   void __set_pushtime(const int64_t val);
 
-  void __set_drivers(const std::vector<std::string> & val);
+  void __set_drivers(const std::vector<Driver> & val);
 
   void __set_subsidy(const double val);
 
