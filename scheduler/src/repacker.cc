@@ -4,7 +4,8 @@
 #include "base/time.h"
 #include "base/string_util.h"
 
-DEFINE_int32(period, 4000, "milli-second period for scheduling a pool order");
+DEFINE_int32(schedule_send_period, 5000, "milli-second period for scheduler send a pool order");
+DEFINE_int32(sleep_msec_repacker, 5000, "sleep time in milli-seconds when scheduler is waiting");
 
 using namespace base;
 
@@ -24,16 +25,16 @@ void Repacker::Run() {
       pool_order = NULL;
     }
 
-    usleep(5000000);
+    base::MilliSleep(FLAGS_sleep_msec_repacker);
   }
 
 }
 
 void Repacker::CheckAndWait(PoolOrder* pool_order) {
   // wait period time - 1s
-  int duration = FLAGS_period - (int)(GetTimeInMs() - pool_order->pushtime);
+  int duration = FLAGS_schedule_send_period - (int)(GetTimeInMs() - pool_order->pushtime);
   if (duration > 0) {
-    MilliSleep(duration);
+    base::MilliSleep(duration);
   }
 
   // check cancel or done

@@ -116,7 +116,12 @@ class RedisMap {
       }
       return p;
     }
-    
+
+    void Del(const std::string& key) {
+      redisReply* p = r_->execute("HDEL %s %s", hn_.c_str(), key.c_str());
+      freeReplyObject(p);
+    }
+
     int Size() {
       ReplyObj t;
       t = r_->execute("HLEN %s", hn_.c_str());

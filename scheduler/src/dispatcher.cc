@@ -2,6 +2,8 @@
 #include "dispatcher.h"
 #include "order_types.h"
 
+DEFINE_int32(sleep_msec_dispatcher, 5000, "sleep time in milli-seconds when scheduler is waiting");
+
 using namespace base;
 
 namespace scheduler {
@@ -28,7 +30,7 @@ void Dispatcher::Run() {
 
     } 
     
-    usleep(100000);
+    base::MilliSleep(FLAGS_sleep_msec_dispatcher);
   }
 }
 

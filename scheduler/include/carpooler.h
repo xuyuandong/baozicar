@@ -33,8 +33,8 @@ class Carpooler : public Connector {
     }
 
   protected:
-    void BatchClustering(const std::string& path_id, std::vector<PoolOrder*>& pool_vec, bool checktime);
-    
+    void BatchClustering(const std::string& path_id, std::vector<PoolOrder*>& pool_vec, bool timeout);
+
     void ProcessLeftOrders(std::vector<PoolOrder*>& pool_vec);
 
     void OutputCarpool(const std::vector<PoolOrder*>& pool_vec);

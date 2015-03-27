@@ -13,6 +13,7 @@ DEFINE_int32(output_size, 4, "threshold size for output poolorder");
 DEFINE_int32(pool_size, 3, "carpool max size");
 DEFINE_int32(cluster_interval, 300, "carpool cluster time interval");
 DEFINE_int32(subsidy_duration, 1800, "subsidy time duration");
+DEFINE_int32(sleep_msec_carpooler, 5000, "sleep time in milli-seconds when scheduler is waiting");
 
 using namespace boost::unordered;
 
@@ -100,7 +101,7 @@ void Carpooler::Run() {
 
     // sleep
     if (in_queue_->Empty()) {
-      usleep(5000000);
+      base::MilliSleep(FLAGS_sleep_msec_carpooler);
     }
   }
 }
