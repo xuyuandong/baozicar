@@ -9,6 +9,8 @@ import order_util
 
 from tornado.concurrent import run_on_executor
 from tornado.options import define, options
+from tornado.log import app_log
+
 from futures import ThreadPoolExecutor
 from thrift.TSerialization import *
 
@@ -30,7 +32,8 @@ class DriverLoginHandler(BaseHandler):
 
   @tornado.web.asynchronous
   @tornado.gen.coroutine
-  def post(self):
+  def get(self):
+  #def post(self):
     phone = self.get_argument('phone')
     authcode = self.get_argument('authcode')
     dev_id = self.get_argument('dev_id')
@@ -51,9 +54,8 @@ class DriverLoginHandler(BaseHandler):
       # device <-> push_id is one one mapping 
       self.r.hmset(rkey, {'device':dev_id, 'push':push_id})
 
-    # return token
-    token = self.set_secure_cookie(options.token_key, phone)
-    self.write({'status_code':200, 'error_msg':'', 'token':token})
+    # update status, join scheduler
+    self.join_scheduler(phone)
 
   @run_on_executor
   def async_bind(self, phone, push_id):
@@ -61,25 +63,72 @@ class DriverLoginHandler(BaseHandler):
     ret2 = self.push.driver.bindAlias(phone, push_id)
     return (ret2['result'].upper() == 'OK')
 
+  def join_scheduler(self, phone):
+    app_log.info('driver phone: %s', phone)
+
+    # select driver information
+    table = 'cardb.t_driver'
+    sql = "select name, from_city, to_city, status, priority \
+        from %s where phone='%s' limit 1"%(table, phone)
+    obj = self.db.get(sql)
+
+    # check driver information
+    if obj is None or len(obj) == 0:
+      app_log.info('driver is not registered in our sysytem')
+      self.write({'status_code':201, 'error_msg':'driver is not registered in our system'})
+      return
+     
+    if obj.status != DriverStatus.busy:
+      # update driver status
+      sql = "update %s set status=%s where phone='%s'"%(table, DriverStatus.online, phone)
+      self.db.execute(sql)
+
+      # add to scheduler
+      path_rpq = options.driver_rpq + '-'.join([obj.from_city, obj.to_city])
+      self.r.zadd(path_rpq, phone, obj.priority)
+
+    # access token
+    token = self.set_secure_cookie(options.token_key, phone)
+    # result
+    msg = { 'status_code':200, 
+        'error_msg':'', 
+        'token':token,
+        'name':obj.name, 
+        'from_city':obj.from_city, 
+        'to_city':obj.to_city,
+        'driver_status':obj.status
+        }
+    self.write(msg)
 
 # =============================================
 
 # /change_driver_status
 class DriverChangeStatusHandler(BaseHandler):
   @base.authenticated
-  def post(self):
+  def get(self):
+  #def post(self):
     phone = self.current_user
     status = self.get_argument('status')
+    
+    # check target status 
+    if int(status) == DriverStatus.busy:
+      self.write({'status_code':201, 'error_msg':'you cannot change to busy status'})
+      return
 
     # update mysql driver status
     table = 'cardb.t_driver'
+    sql = "select from_city, to_city, status, priority \
+        from %s where phone='%s' limit 1"%(table, phone)
+    route  = self.db.get(sql)
+    
+    # check current status
+    if route.status == DriverStatus.busy:
+      self.write({'status_code':201, 'error_msg':'you do not finish your job, cannot change status'})
+      return
+
+    # update status
     sql = "update %s set status=%s where phone='%s'"%(table, status, phone)
     self.db.execute(sql)
-
-    # get driver route
-    sql = "select from_city, to_city, priority from %s where phone='%s'"\
-        %(table, phone)
-    route = self.db.get(sql)
 
     # update redis scheduler
     path_rpq = options.driver_rpq + '-'.join([route.from_city, route.to_city])
@@ -87,7 +136,7 @@ class DriverChangeStatusHandler(BaseHandler):
     if int(status) == DriverStatus.offline: # online -> offline
       result = self.r.zrem(path_rpq, phone)
     else:  # offline -> online
-      result = self.r.zadd(path_rpq, route.priority, phone)
+      result = self.r.zadd(path_rpq, phone, route.priority)
 
     # return result
     if result == 1:
@@ -99,14 +148,15 @@ class DriverChangeStatusHandler(BaseHandler):
 # /change_driver_route
 class DriverChangeRouteHandler(BaseHandler):
   @base.authenticated
-  def post(self):
+  def get(self):
+  #def post(self):
     phone = self.current_user
     from_city = self.get_argument('from_city')
     to_city = self.get_argument('to_city')
 
     # select priority
     table = 'cardb.t_driver'
-    sql = "select priority from %s where phone='%s'"%(table, phone)
+    sql = "select priority from %s where phone='%s' limit 1"%(table, phone)
     obj = self.db.get(sql)
 
     # update mysql
@@ -120,7 +170,7 @@ class DriverChangeRouteHandler(BaseHandler):
 
     pipe = self.r.pipeline()
     pipe.zrem(old_path_rpq, phone)
-    pipe.zadd(path_rpq, obj.priority, phone)
+    pipe.zadd(path_rpq, phone, obj.priority)
     pipe.execute()
 
     # return result
@@ -131,7 +181,8 @@ class DriverChangeRouteHandler(BaseHandler):
 # /get_poolorder_list
 class GetPoolOrderListHandler(BaseHandler):
   @base.authenticated
-  def post(self):
+  def get(self):
+  #def post(self):
     phone = self.current_user
     date = self.get_argument('date')
     poltype = self.get_argument('poolorder_list_type')
@@ -148,13 +199,13 @@ class GetPoolOrderListHandler(BaseHandler):
     # select mysql
     condition = "and po_type='%s'"%(poltype) if int(poltype) < 2 else ""
 
-    sql = "select po_id, po_type, status, from_city, to_city, price, dt\
-        from %s where phone='%s' %s"%(table, phone, condition)
+    sql = "select id, po_type, status, from_city, to_city, price, dt\
+        from %s where phone='%s' %s order by dt"%(table, phone, condition)
     objlist = self.db.query(sql)
 
     # poolorder list
     polist = [{
-       'poolorder_id': obj.po_id,
+       'poolorder_id': obj.id,
        'poolorder_date': obj.dt.strftime("%Y-%m-%d %H:%M:%S"),
        'poolorder_type': obj.po_type,
        'poolorder_status': obj.status,
@@ -176,7 +227,8 @@ class GetPoolOrderListHandler(BaseHandler):
 # /get_poolorder_detail
 class GetPoolOrderDetailHandler(BaseHandler):
   @base.authenticated
-  def post(self):
+  def get(self):
+  #def post(self):
     phone = self.current_user
     date = self.get_argument('date')
     poid = self.get_argument('poolorder_id')
@@ -192,7 +244,7 @@ class GetPoolOrderDetailHandler(BaseHandler):
 
     # select sub-orders from mysql
     sql = "select po_type, status, from_city, to_city, price, orders\
-        from %s where po_id='%s'"%(table, poid)
+        from %s where id=%s limit 1"%(table, poid)
     obj = self.db.get(sql)
 
     # select user info from sub-orders
@@ -237,7 +289,8 @@ class GetPoolOrderDetailHandler(BaseHandler):
 # /change_poolorder_status
 class ChangePoolOrderStatusHandler(BaseHandler):
   @base.authenticated
-  def post(self):
+  def get(self):
+  #def post(self):
     phone = self.current_user
 
     # confirm->32bit string id, else->integer id
@@ -248,99 +301,136 @@ class ChangePoolOrderStatusHandler(BaseHandler):
         POStatus.confirm: self.confirm,
         POStatus.unfreeze: self.unfreeze,
         POStatus.ongoing: self.ongoing,
-        POStatus.done: self.done,
-        POStatus.cancel: self.cancel
+        POStatus.done: self.done
         }
     # switch status to pick method
     if status in action:
       action.get(status)(phone, poid)
     else:
-      self.write({'status_code':201, 'error_msg':'wrong action status'})
+      self.write({'status_code':201, 'error_msg':'wrong action'})
 
 
   def confirm(self, phone, poid):
     # get poolorder
     postr = self.r.hget(options.poolorder_rm, poid)
-    if len(postr) == 0: # failed
-      self.write({'status_code':201, 'error_msg':'already canceled or confirmed'})
+    if postr is None or len(postr) == 0: # failed
+      self.write({'status_code':201, \
+          'temp_poolorder_id': poid, \
+          'error_msg':'already canceled by user or confirmed by other driver'})
       return
 
     # get orders from poolorder thrift object
     poolorder = PoolOrder()
     poolorder = deserialize(poolorder, postr)
 
+    # path = from & to city
+    from_city = poolorder.order_list[0].path.from_city
+    to_city = poolorder.order_list[0].path.to_city
+    path = '-'.join([from_city, to_city])
+
+    # lock the driver
+    priority = self.__confirm_lock_driver(phone, path) 
+    if priority < 0: # already try confirm in another poolorder
+      self.write({'status_code':201, 'error_msg':'you are trying confirm another poolorder'})
+      return
+
+    # get sub-orders infomation
     orderids = [ str(order.id) for order in poolorder.order_list ]
     userphones = [order.phone for order in poolorder.order_list ]
     total_price = poolorder.subsidy + sum([order.price for order in poolorder.order_list])
 
     # try confirm
     ret = order_util.ConfirmOrder(self.r, orderids)
+    if ret is False: # confirm failed
+      self.__confirm_unlock_driver(phone, path, priority)
+      self.write({'status_code':201, 'is_new':True, \
+          'temp_poolorder_id':poid, \
+          'error_msg':'already canceled by user or confirmed by other driver'})
+      return
 
-    if ret is True: # success
-      # from & to city
-      from_city = poolorder.order_list[0].path.from_city
-      to_city = poolorder.order_list[0].path.to_city
+    # successful confirm: ########
+      
+    # weather to remove driver from sheduler queue
+    status = POStatus.confirm if (poolorder.cartype == POType.special) else POStatus.ongoing
+    self.__confirm_update_driver_status(phone, priority, path, status)
 
-      # weather to remove driver from sheduler queue
-      status = POStatus.confirm
-      if poolorder.cartype == POType.carpool:
-        status = POStatus.ongoing
-        path_rpq = options.driver_rpq + '-'.join([from_city, to_city])
-        self.r.zrem(path_rpq, phone)
+    # insert poolorder into mysql
+    poolorder_id = base.uuid(phone)
 
-      # insert poolorder into mysql
-      table = 'cardb.t_poolorder'
-      sql = "insert into %s \
-          (po_id, po_type, status, price, phone, from_city, to_city, orders, subsidy, sstype, dt) \
-          values('%s', %s, %s, %s, '%s', '%s', '%s', '%s', %s, %s, null)"\
-          %(table, poid, poolorder.cartype, status,
-          total_price, phone, from_city, to_city, ','.join(orderids),
-          poolorder.subsidy, poolorder.sstype)
+    table = 'cardb.t_poolorder'
+    sql = "insert into %s \
+        (id, po_id, po_type, status, price, phone, from_city, to_city, orders, subsidy, sstype, dt) \
+        values(%s, '%s', %s, %s, %s, '%s', '%s', '%s', '%s', %s, %s, null)"\
+        %(table, poolorder_id, poid, poolorder.cartype, status,
+        total_price, phone, from_city, to_city, ','.join(orderids),
+        poolorder.subsidy, poolorder.sstype)
+    self.db.execute(sql)
+
+    # update orders status
+    self.__confirm_update_order_status(poolorder.order_list)
+
+    # push response message to users
+    self.__confirm_push_message(phone, poolorder.order_list)
+
+    # return result
+    self.write({'status_code':200, 'is_new':True, 'error_msg':'', \
+        'poolorder_id':poolorder_id, 'temp_poolorder_id':poid })
+
+
+  def __confirm_lock_driver(self, phone, path):
+    driver_rpq = options.driver_rpq + path
+    priority = self.r.zscore(driver_rpq, phone)
+    ret = self.r.zrem(driver_rpq, phone)
+    return priority if (ret > 0) else -1
+
+  def __confirm_unlock_driver(self, phone, path, priority):
+    driver_rpq = options.driver_rpq + path
+    self.r.zadd(driver_rpq, phone, priority)
+      
+
+  def __confirm_update_driver_status(self, phone, priority, path, poolorder_status):
+    path_obj = options.path_rpf + path
+    driver_num = self.r.hget(path_obj, 'driver_num')
+    priority = priority + int(driver_num)
+    
+    table = 't_driver'
+    if poolorder_status == POStatus.confirm:
+      sql = "update %s set priority=%s where phone='%s'"%(table, priority, phone)
+      self.db.execute(sql)
+      
+      driver_rpq = options.driver_rpq + path
+      self.r.zadd(driver_rpq, phone, priority)
+
+    else: # ongoing
+      sql = "update %s set status=%s, priority=%s \
+          where phone='%s'"%(table, DriverStatus.busy, priority, phone)
       self.db.execute(sql)
 
-      # coupon unique id generator
-      obj = self.db.get("select last_insert_id() as id")
-      poolorder_id = obj.id
+  def __confirm_update_order_status(self, order_list):
+    table = 'cardb.t_order'
+    order_condition = ','.join([str(order.id) for order in order_list])
+    sql = "update %s set status=%s where id in (%s)"%(table, OrderStatus.confirm, order_condition)
+    self.db.execute(sql)
 
-      # change driver priority
-      self.__confirm_change_priority(phone, poolorder)
-
-      # push response message to users
-      self.__confirm_push_message(phone, userphones)
-
-      # return result
-      self.write({'status_code':200, 'error_msg':'', 'poolorder_id':poolorder_id})
-    else:
-      self.write({'status_code':201, 'error_msg':'already canceled or confirmed'})
-
-  def __confirm_change_priority(self, phone, poolorder):
-    from_city = poolorder.order_list[0].path.from_city
-    to_city = poolorder.order_list[0].path.to_city
-    
-    path = options.path_rpf + '-'.join([from_city, to_city])
-    driver_num = self.r.hget(path, 'driver_num')
-
-    for driver in poolorder.drivers:
-      if driver.phone == phone:
-        priority = driver.priority + int(driver_num)
-        table = 't_driver'
-        sql = "update %s set priority=%s where phone='%s'"%(table, driver.priority, phone)
-        self.db.execute(sql)
-
-  def __confirm_push_message(self, phone, userphones):
+  def __confirm_push_message(self, driver_phone, order_list):
     pushmsg = Message()
     pushmsg.template_type = TempType.trans
-    pushmsg.push_type = PushType.many
+    pushmsg.push_type = PushType.one
     pushmsg.app_type = AppType.user
-    pushmsg.title = 'poolorder'
-    pushmsg.content = phone  # driver info
-    pushmsg.target = userphones
-    thrift_obj = serialize(pushmsg)
-    self.r.lpush(options.queue, thrift_obj)
+    pushmsg.title = 'confirm_poolorder'
+    
+    for order in order_list:
+      jdict = { 'driver_phone': driver_phone,
+          'order_id': order.id }
+      pushmsg.content = json.dumps(jdict)
+      pushmsg.target = [order.phone]
+      
+      thrift_obj = serialize(pushmsg)
+      self.r.lpush(options.queue, thrift_obj)
 
   def unfreeze(self, phone, poid):
     table = 'cardb.t_poolorder'
-    sql = "select from_city, to_city from %s where id=%s"%(table, poid)
+    sql = "select from_city, to_city from %s where id=%s limit 1"%(table, poid)
     obj = self.db.get(sql)
 
     path_rpq1 = options.driver_rpq + '-'.join([obj.from_city, obj.to_city])
@@ -350,9 +440,17 @@ class ChangePoolOrderStatusHandler(BaseHandler):
     ret = pipe.zrem(path_rpq1, phone).zrem(path_rpq2, phone).execute()
 
     if ret[0] + ret[1] > 0:
-      self.write({'status_code':200, 'error_msg':''})
+      table = 'cardb.t_driver'
+      sql = "update %s set status=%s where phone='%s'"%(table, DriverStatus.busy, phone)
+      self.db.execute(sql)
+
+      sql = "update %s set status="
+      self.write({'status_code':200, 'is_new':False, \
+          'poolorder_id':poid, 'error_msg':''})
     else:
-      self.write({'status_code':201, 'error_msg':'failed to unfreeze, driver is not available'})
+      self.write({'status_code':201, 'is_new':False, \
+          'poolorder_id':poid, \
+          'error_msg':'failed to unfreeze, driver is not available'})
 
 
   def ongoing(self, phone, poid):
@@ -360,7 +458,39 @@ class ChangePoolOrderStatusHandler(BaseHandler):
     sql = "update %s set status=%s where id=%s"%(table, POStatus.ongoing, poid)
     self.db.execute(sql)
 
-    self.write({'status_code':200, 'error_msg':''})
+    # TODO: push message to user
+
+    self.write({'status_code':200, 'error_msg':'', 'is_new':False, 'poolorder_id':poid})
+
+  def __ongoing_push_message(self, driver_phone, poid):
+    # get sub-order ids
+    table = 'cardb.t_poolorder'
+    sql = "select orders from %s where id=%s limit 1"%(table, poid)
+    obj = self.db.get(sql)
+
+    orderids = obj.orders.split(',')
+    
+    # get user phones
+    table = 'cardb.t_order'
+    sqls = ["select id, phone from %s where id=%s"%(table, oid) for oid in orderids ]
+    sql = " union all ".join(sqls) if len(orderids) > 1 else sqls[0]
+    objlist = self.db.query(sql)
+
+    # push messages
+    pushmsg = Message()
+    pushmsg.template_type = TempType.trans
+    pushmsg.push_type = PushType.one
+    pushmsg.app_type = AppType.user
+    pushmsg.title = 'ongoing_poolorder'
+    
+    for order in objlist:
+      jdict = { 'driver_phone': driver_phone,
+          'order_id': order.id }
+      pushmsg.content = json.dumps(jdict)
+      pushmsg.target = [order.phone]
+      
+      thrift_obj = serialize(pushmsg)
+      self.r.lpush(options.queue, thrift_obj)
 
 
   def done(self, phone, poid):
@@ -370,19 +500,19 @@ class ChangePoolOrderStatusHandler(BaseHandler):
     self.db.execute(sql)
 
     # select orders from poolorder
-    sql = "select orders from %s where id=%s"%(table, poid)
+    sql = "select orders from %s where id=%s limit 1"%(table, poid)
     obj = self.db.get(sql)
     orderids = obj.orders.split(',')
 
     # update order status
     table = 'cardb.t_order'
     order_condition = ','.join([str(oid) for oid in orderids])
-    sql = "update %s set status=%s where id in (%s)"%(table, OrderStatus.done, order_condition)
+    sql = "update %s set status=%s where id in (%s)"%(table, OrderStatus.toeval, order_condition)
     self.db.execute(sql)
 
     # select driver route and priority
     table = 'cardb.t_driver'
-    sql = "select from_city, to_city, priority from %s where phone='%s'"%(table, phone)
+    sql = "select from_city, to_city, priority from %s where phone='%s' limit 1"%(table, phone)
     obj = self.db.get(sql)
 
     # update driver route and status
@@ -392,20 +522,33 @@ class ChangePoolOrderStatusHandler(BaseHandler):
 
     # put driver to backward route set
     path_rpq = options.driver_rpq + '-'.join([obj.to_city, obj.from_city])
-    self.r.zadd(path_rpq, obj.priority, phone)
+    self.r.zadd(path_rpq, phone, obj.priority)
 
     # push share message, transfer to offline crontab, accelebrate qps
     # return result
-    self.write({'status_code':200, 'error_msg':''})
+    self.write({'status_code':200, 'error_msg':'', 'is_new':False, 'poolorder_id':poid})
 
 
-  def cancel(self, phone, poid):
+# /cancel_poolorder
+class CancelPoolOrderHandler(BaseHandler):
+  def get(self):
+  #def post(self):
+    phone = self.get_argument('phone')
+    poid = self.get_argument('poolorder_id')
+    super_token = self.get_argument('super_token')
+    
+    if super_token != options.super_token:
+      self.write('Permission denied!')
+      return
+    self.cancel(phone, poid)
+  
+  def cancel(self, driver_phone, poid):
     table = 'cardb.t_poolorder'
 
     sql = "update %s set status=%s where id=%s"%(table, POStatus.cancel, poid)
     self.db.execute(sql)
 
-    sql = "select orders from %s where id=%s"%(table, poid)
+    sql = "select orders from %s where id=%s limit 1"%(table, poid)
     obj = self.db.get(sql)
 
     # select all sub-orders
@@ -419,10 +562,7 @@ class ChangePoolOrderStatusHandler(BaseHandler):
     objlist = self.db.query(sql)
 
     # put back all sub-orders
-    userphones = []
     for obj in objlist:
-      userphones.append(obj.phone)
-
       path = Path()
       path.from_city = obj.from_city
       path.from_place = obj.from_place
@@ -451,36 +591,41 @@ class ChangePoolOrderStatusHandler(BaseHandler):
       pipe.lpush(options.order_rq, oid)
       pipe.execute()
 
-    # put back driver to redis route set
-    table = 'cardb.t_driver'
-    sql = "select from_city, to_city, priority from %s where phone='%s'"%(table, phone)
-    obj = self.db.get(sql)
-
-    path_rpq = options.driver_rpq + '-'.join([obj.from_city, obj.to_city])
-    self.r.zadd(path_rpq, obj.priority, phone)
-
-    # push message
+    # push cancelled message to users
     pushmsg = Message()
     pushmsg.template_type = TempType.trans
-    pushmsg.push_type = PushType.many
+    pushmsg.push_type = PushType.one
     pushmsg.app_type = AppType.user
-    pushmsg.title = 'poolorder'
-    pushmsg.content = 'cancel old, wait for new driver to confirm'
-    pushmsg.target = userphones
-    thrift_obj = serialize(pushmsg)
-    self.r.lpush(options.queue, thrift_obj)
+    pushmsg.title = 'cancel_poolorder'
+    
+    for obj in objlist: 
+      jdict = {'driver_phone':driver_phone,
+        'order_id':obj.id
+        }
+      pushmsg.content = json.dumps(jdict)
+      pushmsg.target = [obj.phone]
+      thrift_obj = serialize(pushmsg)
+      self.r.lpush(options.queue, thrift_obj)
+
+    # put back driver to redis route set
+    #table = 'cardb.t_driver'
+    #sql = "select name, carno, from_city, to_city, priority from %s where phone='%s'"%(table, phone)
+    #obj = self.db.get(sql)
+    #path_rpq = options.driver_rpq + '-'.join([obj.from_city, obj.to_city])
+    #self.r.zadd(path_rpq, phone, obj.priority)
 
     # return result
-    self.write({'status_code':200, 'error_msg':''})
+    self.write({'status_code':200, 'error_msg':'', 'is_new':False})
 
 
 # /read_pushed_poolorder
 class ReadPushedPoolOrderHandler(BaseHandler):
   @base.authenticated
-  def post(self):
+  def get(self):
+  #def post(self):
     poid = self.get_argument('poolorder_id')
     postr = self.r.hget(options.poolorder_rm, poid)
-    if len(postr) == 0: # failed
+    if postr is None or len(postr) == 0: # failed
       self.write({'status_code':201, 'error_msg':'already canceled or confirmed'})
       return
 
@@ -502,7 +647,7 @@ class ReadPushedPoolOrderHandler(BaseHandler):
     if order_type == POType.special:
       order_id = poolorder.order_list[0].id
       table = 'cardb.t_order'
-      sql = "select start_time, msg from %s where id=%s"%(table, order_id)
+      sql = "select start_time, msg from %s where id=%s limit 1"%(table, order_id)
       obj = self.db.get(sql)
 
       start_time = obj.start_time
@@ -512,6 +657,7 @@ class ReadPushedPoolOrderHandler(BaseHandler):
     msg = {
         'status_code':200,
         'error_msg':'',
+        'poolorder_id': poid,
         'total_price': total_price,
         'from_city': from_city,
         'to_city': to_city,

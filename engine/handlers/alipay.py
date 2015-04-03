@@ -90,19 +90,21 @@ class AlipayNotifyHandler(BaseHandler):
     gmtp = self.get_argument('gmt_payment')
 
     # insert into mysql
+    pay_id = base.uuid(order_id)
+
     table = 'cardb.t_payment'
     sql = "insert into %s \
-        (trade_no, order_id, price, status, buyer, seller, \
+        (id, trade_no, order_id, price, status, buyer, seller, \
         buyer_id, seller_id, gmt_create, gmt_payment, extra_info, dt)\
-        values (%s, '%s', %s, %s, '%s', '%s', '%s', '%s', '%s', '%s', '', null)"\
-        %(table, trade_no, order_id, price, 0, buyer, seller, buyerid, sellerid, gmtc, gmtp)
+        values (%s, %s, '%s', %s, %s, '%s', '%s', '%s', '%s', '%s', '%s', '', null)"\
+        %(table, pay_id, trade_no, order_id, price, 0, buyer, seller, buyerid, sellerid, gmtc, gmtp)
     self.db.execute(sql)
     
     # payment unique id generator
-    obj = self.db.get("select last_insert_id() as id")
+    # obj = self.db.get("select last_insert_id() as id")
 
     # push order to scheduler
-    self.process(order_id, obj.id, price)
+    self.process(order_id, pay_id, price)
 
     # return result
     self.write('success')

@@ -37,13 +37,15 @@ class Carpooler : public Connector {
 
     void ProcessLeftOrders(std::vector<PoolOrder*>& pool_vec);
 
-    void OutputCarpool(const std::vector<PoolOrder*>& pool_vec);
+    void OutputCarpool(std::vector<PoolOrder*>& pool_vec);
+    
+    bool CheckTimeOut(const std::string& path_id);
     
     void AddSpecialOrder(Order* order, std::vector<PoolOrder*>& pool_vec);
 
     int GetSubsidyPrice(const std::string& path_id);
 
-    void CheckOrSubsidyOrder(std::vector<Order*>& orders, std::vector<PoolOrder*>& pool_vec, int subsidy_price);
+    void CheckOrSubsidyOrder(std::vector<Order*>* order_vec, std::vector<PoolOrder*>& pool_vec, int subsidy_price);
 
     void SetPoolId(PoolOrder* pool_order);
 

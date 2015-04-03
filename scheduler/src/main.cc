@@ -84,7 +84,7 @@ int main(int argc, char* argv[]) {
   
   // wait finished
   while (1) {
-    sleep(1);
+    sleep(10);
   }
 
   return 0;

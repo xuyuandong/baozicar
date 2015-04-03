@@ -29,7 +29,9 @@ struct Driver {
 }
 
 struct HistoryDriver {
-  1: set<string> drivers
+  1: set<string> drivers,
+  2: bool reduced = false,
+  3: i64 update_time
 }
 
 struct PoolOrder {

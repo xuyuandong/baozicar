@@ -5,7 +5,7 @@
 #include "order_types.h"
 
 DEFINE_int32(sleep_msec_planner, 5000, "sleep time in milli-seconds when scheduler is waiting");
-DEFINE_int32(schedule_restart_period, 3600000, "milli-second period for scheduler re-send a pool order");
+DEFINE_int32(schedule_restart_period, 3600, "second period for scheduler re-send a pool order");
 
 using namespace base;
 
@@ -30,6 +30,7 @@ void Planner::Run() {
       }
     } 
 
+    VLOG(5) << "planner sleep " << FLAGS_sleep_msec_planner << " msec";
     base::MilliSleep(FLAGS_sleep_msec_planner);
   }
 
@@ -50,15 +51,15 @@ void Planner::ProcessPoolOrder(PoolOrder* pool_order) {
   }
 
   // driver process: 
+  int history_num = hd.drivers.size();
   const Path& path = pool_order->order_list[0].path;
   std::string path_id = path.from_city + "-" + path.to_city;
- 
-  int history_num = hd.drivers.size();
   
   // 1. reduce history drivers priority
-  if (history_num == 1) {
+  if (history_num == 1 && !hd.reduced) {
     VLOG(2) << "change priority for " << path_id;
     ChangePriority(path_id, hd.drivers);
+    hd.reduced = true;
   }
   
   // 2. fetch new drivers
@@ -70,29 +71,37 @@ void Planner::ProcessPoolOrder(PoolOrder* pool_order) {
   pool_order->drivers.clear();
   for (size_t i = 0; i < robj.Num(); ++i) {
     std::string did(robj.Ele(i)->str);
-    int priority = (i & 0x01 > 0)? StringToInt(did) : -1;
-    VLOG(4) << "i=" << i << " did=" << did << " priority=" << priority;
+    bool isphone = (i % 2 == 0);
+    VLOG(4) << "isphone=" << isphone << " did=" << did;
     
-    if (priority < 0 && hd.drivers.find(did) == hd.drivers.end()) {
-      VLOG(4) << "driver phone, assert -1=" << new_driver_index;
-      Driver one;
-      one.phone = did;
-      pool_order->drivers.push_back(one);
-      new_driver_index = (int)(pool_order->drivers.size() - 1);
+    if (isphone) {
+      if (hd.drivers.find(did) == hd.drivers.end()) {
+        VLOG(4) << "new driver phone " << did;
+        Driver one;
+        one.phone = did;
+        pool_order->drivers.push_back(one);
+        new_driver_index = (int)(pool_order->drivers.size() - 1);
+      } else {
+        VLOG(4) << "old driver phone " << did;
+        new_driver_index = -1;
+      }
+    } else {
+      int priority = StringToInt(did);
+      if (new_driver_index >= 0) {
+        VLOG(4) << "new driver priority " << priority << ", index=" << new_driver_index;
+        pool_order->drivers[new_driver_index].priority = priority;
+        new_driver_index = -1;
+      } else {
+        VLOG(4) << "old driver priority " << priority;
+      }
     }
 
-    if (priority >= 0 && new_driver_index > 0) {
-      VLOG(4) << "driver priority, index=" << new_driver_index;
-      pool_order->drivers[new_driver_index].priority = priority;
-      new_driver_index = -1;
-    }
   }
 
 
   if (pool_order->drivers.size() > 0) {
     // send message, update pushtime:
     VLOG(2) << "send message: " << pool_order->id;
-    pool_order->pushtime = GetTimeInMs();
     SendMessage(pool_order);
 
     // record new history drivers
@@ -100,6 +109,8 @@ void Planner::ProcessPoolOrder(PoolOrder* pool_order) {
     for (size_t i = 0; i < pool_order->drivers.size(); ++i) {
       hd.drivers.insert(pool_order->drivers[i].phone);
     }
+    hd.update_time = GetTimeInSec();
+    
     std::string hdstr = ThriftToString(&hd);
     history_driver_rm_.Set(pool_id, hdstr);
 
@@ -108,8 +119,9 @@ void Planner::ProcessPoolOrder(PoolOrder* pool_order) {
     VLOG(2) << "no new drivers available for " << pool_order->id;
   
     // check if timeout, clear history driver and re-send
-    int64_t duration = base::GetTimeInMs() - pool_order->pushtime;
-    if (duration > FLAGS_schedule_restart_period) {
+    int64_t duration = base::GetTimeInSec() - hd.update_time;
+    if (FLAGS_schedule_restart_period > 1 &&
+        duration > FLAGS_schedule_restart_period) {
       VLOG(2) << "clear history driver and re-start sending loop";
       history_driver_rm_.Del(pool_id);
     }
@@ -118,6 +130,7 @@ void Planner::ProcessPoolOrder(PoolOrder* pool_order) {
    
   // send to re-pack queue
   VLOG(2) << "put to repacker queue";
+  pool_order->pushtime = GetTimeInMs();
   queue_->Push(pool_order);
 }
 

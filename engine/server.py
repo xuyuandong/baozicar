@@ -36,12 +36,6 @@ class Application(tornado.web.Application):
         (r"/alipay_notify", AlipayNotifyHandler),
 
         (r"/test_clear_system", TestClearSystemHandler),
-        (r"/test_add_driver", TestAddDriverHandler),
-        (r"/test_insert", TestInsertHandler),
-        (r"/test_select", TestSelectHandler),
-        (r"/test_update", TestUpdateHandler),
-        (r"/test_delete", TestDeleteHandler),
-        (r"/test_push", TestPushHandler),
 
         (r"/login_user", UserLoginHandler),
         (r"/save_profile", SaveProfileHandler),
@@ -53,7 +47,7 @@ class Application(tornado.web.Application):
         (r"/get_order_list", GetOrderListHandler),
         (r"/get_order_detail", GetOrderDetailHandler),
         (r"/submit_comment", SubmitCommentHandler),
-        (r"read_confirmed_order", ReadConfirmedOrderHandler),
+        (r"/read_confirmed_order", ReadConfirmedOrderHandler),
 
         (r"/login_driver", DriverLoginHandler),
         (r"/change_driver_status", DriverChangeStatusHandler),
@@ -62,7 +56,8 @@ class Application(tornado.web.Application):
         (r"/get_poolorder_detail", GetPoolOrderDetailHandler),
         (r"/change_poolorder_status", ChangePoolOrderStatusHandler),
         (r"/read_pushed_poolorder", ReadPushedPoolOrderHandler),
-      ]
+        (r"/cancel_poolorder", CancelPoolOrderHandler),  
+    ]
     settings = dict(
       cookie_secret = "abcdefghijkmlnopqrstuvwxyz",
       template_path = os.path.join(os.path.dirname(__file__), "templates"),

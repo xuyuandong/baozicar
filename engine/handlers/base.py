@@ -1,13 +1,15 @@
 #coding=utf-8
 
-from tornado.options import define, options
-import tornado.web
+import time, datetime, random, uuid
 import functools
 import redis
-import uuid
+
+from tornado.options import define, options
+import tornado.web
 
 define("token_key", default="token", help="token parameter name")
 define("device_key", default="dev_id", help="device id parameter name")
+define("super_token", default="showmeng1234", help="super manager token")
 
 define('authcode_rpf', default='auth_', help="redis authcode key prefix as map")
 define('login_rpf', default='login_', help="redis login user profile key prefix as map")
@@ -45,11 +47,9 @@ OLType = enum(booked=0, toeval=1, done=2, all=3)
 POType = enum(carpool=0, special=1)
 POStatus = enum(wait=0, confirm=1, unfreeze=2, ongoing=3, done=4, cancel=5)
 
-CouponStatus = enum(normal=0, expired=1, used=2)
-DriverStatus = enum(online=0, offline=1)
+CouponStatus = enum(normal=0, expired=1, used=2, locked=3)
+DriverStatus = enum(online=0, offline=1, busy=2)
 
-def UUID():
-  return str(uuid.uuid1())
 
 class BaseHandler(tornado.web.RequestHandler):
 
@@ -105,4 +105,16 @@ def authenticated(method):
       return
     return method(self, *args, **kwargs)
   return wrapper
+
+def uuid(phone):
+  t = datetime.datetime.now()
+  y = t.year%10
+  d = t.day + 31*t.month
+  s = t.hour*3600 + t.minute*60 + t.second
+  r = phone[-4:]
+  ret = '%s%03s%05s%06s%04s'%(y,d,s, t.microsecond, r)
+  return int(ret.replace(' ', '0'))
+
+def UUID():
+  return str(uuid.uuid1())
 

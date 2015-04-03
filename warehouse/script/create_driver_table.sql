@@ -38,16 +38,16 @@ CREATE TABLE IF NOT EXISTS t_driver_credit (
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS t_poolorder (
-  id          INT(10) NOT NULL AUTO_INCREMENT,
+  id          BIGINT(20) UNSIGNED NOT NULL,
   po_id       VARCHAR(36) NOT NULL,
   po_type     INT(2) NOT NULL,
   status      INT(2) NOT NULL,
-  price       FLOAT(6,3) NOT NULL,
+  price       FLOAT(8,3) NOT NULL,
   phone       VARCHAR(16) NOT NULL,
   from_city   VARCHAR(32) NOT NULL,
   to_city     VARCHAR(32) NOT NULL,
   orders      VARCHAR(256) NOT NULL,
-  subsidy     FLOAT(6,3) NOT NULL,
+  subsidy     FLOAT(8,3) NOT NULL,
   sstype      INT(2) NOT NULL,
   last_modify TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   dt          TIMESTAMP NOT NULL DEFAULT 0,

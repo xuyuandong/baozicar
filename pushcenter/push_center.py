@@ -115,6 +115,8 @@ class PushCenter(object):
         }
     self.translateAction = {
         'pool_order': self.TranslatePoolOrder,
+        'confirm_poolorder': self.TranslateConfirmOrder,
+        'cancel_poolorder': self.TranslateCancelOrder,
         'system_note': self.TranslateSystemNote
         }
     self.appId = {
@@ -138,7 +140,7 @@ class PushCenter(object):
     pusher = self.pusher.get(atype)
     
     ptype = tobj.push_type
-    target = tobj.target if len(tobj.target) > 1 else tobj.target[0]
+    target = tobj.target if ptype == 1 else tobj.target[0]
     return self.pushAction.get(ptype)(pusher, template, target)
 
   def __translate_message(self, tobj):
@@ -151,7 +153,7 @@ class PushCenter(object):
     timedfmt = logging.Formatter(timed_format, datefmt=datefmt)
     
     file = name + str(port)
-    handler = logging.handlers.TimedRotatingFileHandler(file)
+    handler = logging.handlers.TimedRotatingFileHandler(file, 'midnight')
     handler.setFormatter(timedfmt)
 
     self.log = logging.getLogger(name)
@@ -170,11 +172,37 @@ class PushCenter(object):
     try:
       po = PoolOrder()
       po = deserialize(po, tobj.content)
-      d['content'] = po.id 
+      d['content'] = json.dumps( {'poolorder_id':po.id} ) 
     except Exception, e:
       self.log.error("deserialize thrift error, ", e)
     return d
 
+  def TranslateConfirmOrder(self, tobj):
+    d = {'ttype': tobj.template_type,
+         'ptype': tobj.push_type,
+         'title': tobj.title,
+         'text':  tobj.text,
+         'url':   tobj.url,
+         'content': tobj.content,
+         'target':tobj.target,
+         'APPID': self.appId[tobj.app_type],
+         'APPKEY':self.appKey[tobj.app_type]
+        }
+    return d
+
+  def TranslateCancelOrder(self, tobj):
+    d = {'ttype': tobj.template_type,
+         'ptype': tobj.push_type,
+         'title': tobj.title,
+         'text':  tobj.text,
+         'url':   tobj.url,
+         'content': tobj.content,
+         'target':tobj.target,
+         'APPID': self.appId[tobj.app_type],
+         'APPKEY':self.appKey[tobj.app_type]
+        }
+    return d
+  
   def TranslateSystemNote(self, tobj):
     pass
 
@@ -182,19 +210,25 @@ class PushCenter(object):
 def main():
   r = redis.StrictRedis(host=options.host, port=options.port)
   pc = PushCenter(options.log, options.pid)
+  
   while (1):
     try:
       obj = r.brpop(options.queue, 1)
       if obj is None:
         time.sleep(1)
         continue
+
       msg = Message()
       msg = deserialize(msg, obj[1])
       ret = pc.push(msg)
       pc.log.info("result %s", ret)
+      
+      result = ret['result'].lower()
+      if result != 'ok' and result != 'notarget':
+        pc.log.info('failed this time, will re-push %s', obj[1])
+        #r.lpush(options.queue, obj[1])
+    
     except Exception, e:
-      if obj is not None:
-        r.lpush(options.queue, obj[1])
       pc.log.error("exception %s", e)
 
 def test():

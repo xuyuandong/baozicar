@@ -8,9 +8,8 @@ SO = -L$(LIB_PATH) -lpthread -lrt -ldl
 
 INCLUDE = -I $(APP)/common/ -I $(APP)/include/ -I /usr/local/include/
 
-LDFLAGS = -static -g -Wall -fPIC
-CXXFLAGS = -fPIC -Wall -g -Ddebug
-#CXXFLAGS = -fPIC -Wall -O3
+LDFLAGS = -shared -g -Wall -fPIC
+CXXFLAGS = -fPIC -Wall -O3
 CC = g++
 
 OBJS = main.o \

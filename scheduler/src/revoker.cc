@@ -3,6 +3,8 @@
 #include "order_types.h"
 #include "base/string_util.h"
 
+DEFINE_int32(sleep_msec_revoker, 5000, "sleep time in milli-seconds when scheduler is waiting");
+
 namespace scheduler {
 
 void Revoker::Run() {
@@ -11,7 +13,12 @@ void Revoker::Run() {
     while (!queue_->Empty()) {
       Order* order = NULL;
       queue_->Pop(order);
-      
+
+      if (order == NULL) {
+        VLOG(2) << "FOUND NULL ORDER";
+        continue;
+      }
+
       const std::string& key = Int64ToString(order->id);
       VLOG(2) << "check order " << key;
 
@@ -25,6 +32,8 @@ void Revoker::Run() {
       order = NULL;
     }
 
+    VLOG(5) << "revoker sleep " << FLAGS_sleep_msec_revoker << " msec";
+    base::MilliSleep(FLAGS_sleep_msec_revoker);
   }
 }
 

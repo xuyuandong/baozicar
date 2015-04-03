@@ -18,7 +18,7 @@ class LogUtil(object):
   def __create_logger(self, name, port):
     file = name + str(port)
     
-    handler = logging.handlers.TimedRotatingFileHandler(file)
+    handler = logging.handlers.TimedRotatingFileHandler(file, 'midnight')
     handler.setFormatter(self.timedfmt)
 
     logger = logging.getLogger(name)

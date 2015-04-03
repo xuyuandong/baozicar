@@ -36,7 +36,7 @@ class GetAuthCodeHandler(BaseHandler):
   @tornado.gen.coroutine
   def get(self):
     phone = self.get_argument("phone")
-    authcode = str(random.randint(1000, 9999))
+    authcode = '1234' #str(random.randint(1000, 9999))
 
     result = ''
     try:
@@ -75,7 +75,8 @@ class GetAuthCodeHandler(BaseHandler):
 # /query_path
 class QueryPathHandler(BaseHandler):
   #@base.authenticated
-  def post(self): # TODO: check api
+  def get(self):
+  #def post(self): # TODO: check api
     from_city = self.get_argument('from_city')
 
     table = 'cardb.t_path'
@@ -94,7 +95,8 @@ class QueryPathHandler(BaseHandler):
 # /query_price
 class QueryPriceHandler(BaseHandler):
   #@base.authenticated
-  def post(self):
+  def get(self):
+  #def post(self):
     from_city = self.get_argument('from_city')
     from_place = self.get_argument('from_place')
     from_lat = float(self.get_argument('from_lat'))
@@ -110,7 +112,7 @@ class QueryPriceHandler(BaseHandler):
     # get path infomation from redis
     path = options.path_rpf + '-'.join([from_city, to_city])
     path_obj = self.r.hgetall(path)
-    if path_obj is None:
+    if path_obj is None or len(path_obj) < 15:
       self.write({'status_code':201, 'error_msg':'No information for this path in redis'})
       return
 
@@ -128,8 +130,10 @@ class QueryPriceHandler(BaseHandler):
     # calculate price
     hour = 'h%s'%(time.localtime().tm_hour)
     hour_price = float(path_obj.get(hour, 0))
-    from_price = (from_dist - float(path_obj['from_discount'])) * float(path_obj['from_step'])
-    to_price = (to_dist - float(path_obj['to_discount'])) * float(path_obj['to_step'])
+    from_price = max( 0, \
+        (from_dist - float(path_obj['from_discount'])) * float(path_obj['from_step']) )
+    to_price = max(0, \
+        (to_dist - float(path_obj['to_discount'])) * float(path_obj['to_step']) )
     path_price = float(path_obj['price']) * int(person_num)
 
     total_price = from_price + path_price + to_price + hour_price 

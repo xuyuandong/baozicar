@@ -38,11 +38,14 @@ class UserLoginHandler(BaseHandler):
 
   @tornado.web.asynchronous
   @tornado.gen.coroutine
-  def post(self):
+  def get(self):
+  #def post(self):
     phone = self.get_argument("phone")
     authcode = self.get_argument("authcode")
     dev_id = self.get_argument("dev_id")
     push_id = self.get_argument('push_id')
+    name = self.get_argument('name')
+    #gender = self.get_argument('gender')
 
     # check authcode
     if authcode != self.r.get(options.authcode_rpf + phone):
@@ -58,14 +61,14 @@ class UserLoginHandler(BaseHandler):
         return
 
       # device <-> push_id is one one mapping 
-      self.r.hmset(rkey, {'device':dev_id, 'push':push_id})
+      self.r.hmset(rkey, {'device':dev_id, 'push':push_id, 'name':name})
 
 
     # insert into mysql
     table = 'cardb.t_user'
     sql = "insert into %s (phone, dev, name, image)\
-        values ('%s', '%s', '', '') \
-        on duplicate key update dev='%s'"%(table, phone, dev_id, dev_id)
+        values ('%s', '%s', '%s', '') \
+        on duplicate key update dev='%s'"%(table, phone, dev_id, dev_id, name)
     self.db.execute(sql)
 
     # return token
@@ -82,7 +85,8 @@ class UserLoginHandler(BaseHandler):
 # /save_profile
 class SaveProfileHandler(BaseHandler):
   @base.authenticated
-  def post(self):
+  def get(self):
+  #def post(self):
     phone = self.current_user
     name = self.get_argument('name')
     gender = self.get_argument('gender')
@@ -96,18 +100,20 @@ class SaveProfileHandler(BaseHandler):
 # /get_coupon_list
 class GetCouponListHandler(BaseHandler):
   @base.authenticated
-  def post(self):
+  def get(self):
+  #def post(self):
     phone = self.current_user
 
     # select coupon from mysql, with expired <N days coupon
     table = 'cardb.t_coupon'
-    sql = "select id, ctype, status, price, within, deadline \
+    sql = "select id, ctype, status, price, within, deadline, note \
         from %s where phone='%s' and status != %s"%(table, phone, CouponStatus.used)
     obj = self.db.query(sql)
 
     # coupon list json
     clist = [{'coupon_id': coupon.id,
-          'coupon_desc': coupon.ctype,
+          'coupon_type': coupon.ctype,
+          'coupon_desc': coupon.note,
           'coupon_status': coupon.status,
           'coupon_price': coupon.price,
           'coupon_limit': coupon.within,
@@ -126,14 +132,19 @@ class GetCouponListHandler(BaseHandler):
 # /select_coupon
 class SelectCouponHandler(BaseHandler):
   @base.authenticated
-  def post(self):
+  def get(self):
+  #def post(self):
     order_id = self.get_argument('order_id')
     coupon_id = self.get_argument('coupon_id')
     coupon_price = self.get_argument('coupon_price')
 
     table = 'cardb.t_order'
-    sql = "update %s set coupon_id='%s', coupon_price=%s \
+    sql = "update %s set coupon_id=%s, coupon_price=%s \
         where id=%s"%(table, coupon_id, coupon_price, order_id)
+    self.db.execute(sql)
+
+    table = 'cardb.t_coupon'
+    sql = "update %s set status=%s where id=%s"%(table, CouponStatus.locked, coupon_id)
     self.db.execute(sql)
 
     self.write({'status_code':200, 'error_msg':''})
@@ -142,7 +153,8 @@ class SelectCouponHandler(BaseHandler):
 # /exchange_coupon
 class ExchangeCouponHandler(BaseHandler):
   #@base.authenticated
-  def post(self):
+  def get(self):
+  #def post(self):
     phone = self.get_argument("phone")
     code = self.get_argument("key")
 
@@ -163,9 +175,10 @@ class ExchangeCouponHandler(BaseHandler):
           'error_msg' : '',
           'coupon_info': {
             'coupon_id': obj.id,
+            'coupon_type': int(coupon['ctype']),
             'coupon_desc' : coupon['note'],
-            'coupon_price' : coupon['price'],
-            'coupon_limit' : coupon['within'],
+            'coupon_price' : int(coupon['price']),
+            'coupon_limit' : int(coupon['within']),
             'coupon_deadline': coupon['deadline'],
             },
           'is_new': False
@@ -179,24 +192,26 @@ class ExchangeCouponHandler(BaseHandler):
       return
 
     # insert into mysql db
-    sql = "insert into %s (ctype, status, price, within, deadline, note, phone, code, dt) \
-        values(%s, %s, %s, %s, '%s', '%s', '%s', %s, null)" \
-        %(table, coupon['ctype'], CouponStatus.normal, \
+    coupon_id = base.uuid(phone)
+    sql = "insert into %s (id, ctype, status, price, within, deadline, note, phone, code, dt) \
+        values(%s, %s, %s, %s, %s, '%s', '%s', '%s', %s, null)" \
+        %(table, coupon_id, coupon['ctype'], CouponStatus.normal, \
         coupon['price'], coupon['within'], coupon['deadline'], coupon['note'], phone, code)
     self.db.execute(sql)
 
     # coupon unique id generator
-    obj = self.db.get("select last_insert_id() as id")
-    coupon_id = obj.id
+    #obj = self.db.get("select last_insert_id() as id")
+    #coupon_id = obj.id
 
     msg = {
         'status_code' : 200,
         'error_msg' : '',
         'coupon_info': {
           'coupon_id': coupon_id,
+          'coupon_type': int(coupon['ctype']),
           'coupon_desc' : coupon['note'],
-          'coupon_price' : coupon['price'],
-          'coupon_limit' : coupon['within'],
+          'coupon_price' : int(coupon['price']),
+          'coupon_limit' : int(coupon['within']),
           'coupon_deadline': coupon['deadline'],
           },
         'is_new': True
@@ -210,7 +225,8 @@ class ExchangeCouponHandler(BaseHandler):
 # /submit_order
 class SubmitOrderHandler(BaseHandler):
   @base.authenticated
-  def post(self):
+  def get(self):
+  #def post(self):
     phone = self.current_user
 
     order_type = self.get_argument("order_type")
@@ -229,9 +245,9 @@ class SubmitOrderHandler(BaseHandler):
     to_lat = self.get_argument('to_lat')
     to_lng = self.get_argument('to_lng')
 
-    pay_id = -1 #self.get_argument('pay_id')
+    pay_id = 0 #self.get_argument('pay_id')
     fact_price = 0 #self.get_argument("fact_price")
-    coupon_id = '-' #self.get_argument("coupon_id")
+    coupon_id = 0 #self.get_argument("coupon_id")
     coupon_price = 0 #self.get_argument("coupon_price")
 
     # special car argument
@@ -242,22 +258,24 @@ class SubmitOrderHandler(BaseHandler):
       start_time = self.get_argument('start_time')
 
     # insert into mysql db
+    order_id = base.uuid(phone)
+
     table = 'cardb.t_order'
-    sql = "insert into %s (order_type, status, phone, name, start_time,\
+    sql = "insert into %s (id, order_type, status, phone, name, start_time,\
            from_city, from_place, to_city, to_place, num, msg,\
            pay_id, price, fact_price, coupon_id, coupon_price, \
            from_lat, from_lng, to_lat, to_lng, dt) \
-           values(%s, %s, '%s', '%s', '%s', '%s', '%s', '%s', '%s',\
+           values(%s, %s, %s, '%s', '%s', '%s', '%s', '%s', '%s', '%s',\
            %s, '%s', %s, %s, %s, '%s', %s, %s, %s, %s, %s, null)"\
-           %(table, order_type, OrderStatus.notpay, phone, name, start_time,
+           %(table, order_id, order_type, OrderStatus.notpay, phone, name, start_time,
                from_city, from_place, to_city, to_place, person_num, extra_msg,
                pay_id, price, fact_price, coupon_id, coupon_price,
                from_lat, from_lng, to_lat, to_lng)
     self.db.execute(sql)
 
     # order unique id generator
-    obj = self.db.get("select last_insert_id() as id")
-    order_id = obj.id
+    #obj = self.db.get("select last_insert_id() as id")
+    #order_id = obj.id
 
     # return result
     msg = {'status_code':200,
@@ -270,7 +288,8 @@ class SubmitOrderHandler(BaseHandler):
 # /cancel_order
 class CancelOrderHandler(BaseHandler):
   @base.authenticated
-  def post(self):
+  def get(self):
+  #def post(self):
     order_id = self.get_argument("order_id")
 
     ret = order_util.CancelOrder(self.r, order_id)
@@ -281,6 +300,17 @@ class CancelOrderHandler(BaseHandler):
       sql = "update %s set status=%s where id=%s"%(table, OrderStatus.cancel, order_id)
       self.db.execute(sql)
 
+      # get coupon_id
+      sql = "select coupon_id from %s where id=%s limit 1"%(table, order_id)
+      obj = self.db.get(sql)      
+      coupon_id = obj.coupon_id
+      
+      # restore coupon_id status
+      if coupon_id != 0:
+        table = 'cardb.t_coupon'
+        sql = "update %s set status=%s where id=%s"%(table, CouponStatus.normal, coupon_id)
+        self.db.execute(sql)
+
       self.write({'status_code':200, 'error_msg':''})
     else:
       self.write({'status_code':201, 'error_msg':'failed to cancel'})
@@ -289,11 +319,14 @@ class CancelOrderHandler(BaseHandler):
 # /read_confirmed_order
 class ReadConfirmedOrderHandler(BaseHandler):
   @base.authenticated
-  def post(self): # TODO: check api
-    driver = self.get_argument('driver')
+  def get(self):
+  #def post(self): # TODO: check api
+    driver = self.get_argument('driver_phone')
+    order_id = self.get_argument('order_id')
+    is_confirm = self.get_argument('is_confirm')
 
     table = 'cardb.t_driver'
-    sql = "select name, carno from %s where phone='%s'"%(table, driver)
+    sql = "select name, carno from %s where phone='%s' limit 1"%(table, driver)
     obj = self.db.get(sql)
 
     msg = {
@@ -301,7 +334,9 @@ class ReadConfirmedOrderHandler(BaseHandler):
         'error_msg': '',
         'driver_phone': driver,
         'driver_name': obj.name,
-        'driver_carno': obj.carno
+        'driver_carno': obj.carno,
+        'order_id': int(order_id),
+        'is_confirm': int(is_confirm)
         }
     self.write(msg)
 
@@ -311,7 +346,8 @@ class ReadConfirmedOrderHandler(BaseHandler):
 # /get_order_list
 class GetOrderListHandler(BaseHandler):
   @base.authenticated
-  def post(self):
+  def get(self):
+  #def post(self):
     phone = self.current_user
     date = self.get_argument("date")
 

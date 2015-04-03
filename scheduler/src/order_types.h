@@ -245,31 +245,43 @@ class Driver {
 void swap(Driver &a, Driver &b);
 
 typedef struct _HistoryDriver__isset {
-  _HistoryDriver__isset() : drivers(false) {}
+  _HistoryDriver__isset() : drivers(false), reduced(true), update_time(false) {}
   bool drivers :1;
+  bool reduced :1;
+  bool update_time :1;
 } _HistoryDriver__isset;
 
 class HistoryDriver {
  public:
 
-  static const char* ascii_fingerprint; // = "CE3B5B4FE5AAD4082A2B721F0B604B21";
-  static const uint8_t binary_fingerprint[16]; // = {0xCE,0x3B,0x5B,0x4F,0xE5,0xAA,0xD4,0x08,0x2A,0x2B,0x72,0x1F,0x0B,0x60,0x4B,0x21};
+  static const char* ascii_fingerprint; // = "386F45436DBA0A499AA232A1080C0B92";
+  static const uint8_t binary_fingerprint[16]; // = {0x38,0x6F,0x45,0x43,0x6D,0xBA,0x0A,0x49,0x9A,0xA2,0x32,0xA1,0x08,0x0C,0x0B,0x92};
 
   HistoryDriver(const HistoryDriver&);
   HistoryDriver& operator=(const HistoryDriver&);
-  HistoryDriver() {
+  HistoryDriver() : reduced(false), update_time(0) {
   }
 
   virtual ~HistoryDriver() throw();
   std::set<std::string>  drivers;
+  bool reduced;
+  int64_t update_time;
 
   _HistoryDriver__isset __isset;
 
   void __set_drivers(const std::set<std::string> & val);
 
+  void __set_reduced(const bool val);
+
+  void __set_update_time(const int64_t val);
+
   bool operator == (const HistoryDriver & rhs) const
   {
     if (!(drivers == rhs.drivers))
+      return false;
+    if (!(reduced == rhs.reduced))
+      return false;
+    if (!(update_time == rhs.update_time))
       return false;
     return true;
   }

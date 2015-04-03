@@ -138,7 +138,7 @@ class RedisStructMap {
     RedisStructMap() : r_(NULL) {}
     void Init(Redispp* r, const std::string& name) {
       r_ = r;
-      hp_ = "h_" + name + "_";
+      hp_ = name + "_";
     }
 
     redisReply* Get(const std::string& key, const std::string& structkey) {
@@ -168,7 +168,6 @@ class RedisQueue {
     
     void Put(const std::string& obj) {
       ReplyObj t;
-      VLOG(2) << ln_;
       t = r_->execute("LPUSH %b %b", ln_.c_str(), ln_.size(), obj.c_str(), obj.size());
     }
     

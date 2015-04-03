@@ -25,6 +25,7 @@ void Repacker::Run() {
       pool_order = NULL;
     }
 
+    VLOG(5) << "repacker sleep " << FLAGS_sleep_msec_repacker << " msec";
     base::MilliSleep(FLAGS_sleep_msec_repacker);
   }
 

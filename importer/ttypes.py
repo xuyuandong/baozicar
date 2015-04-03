@@ -24,10 +24,6 @@ class Path:
    - from_place
    - to_city
    - to_place
-   - from_lat
-   - from_lng
-   - to_lat
-   - to_lng
   """
 
   thrift_spec = (
@@ -36,21 +32,13 @@ class Path:
     (2, TType.STRING, 'from_place', None, None, ), # 2
     (3, TType.STRING, 'to_city', None, None, ), # 3
     (4, TType.STRING, 'to_place', None, None, ), # 4
-    (5, TType.DOUBLE, 'from_lat', None, None, ), # 5
-    (6, TType.DOUBLE, 'from_lng', None, None, ), # 6
-    (7, TType.DOUBLE, 'to_lat', None, None, ), # 7
-    (8, TType.DOUBLE, 'to_lng', None, None, ), # 8
   )
 
-  def __init__(self, from_city=None, from_place=None, to_city=None, to_place=None, from_lat=None, from_lng=None, to_lat=None, to_lng=None,):
+  def __init__(self, from_city=None, from_place=None, to_city=None, to_place=None,):
     self.from_city = from_city
     self.from_place = from_place
     self.to_city = to_city
     self.to_place = to_place
-    self.from_lat = from_lat
-    self.from_lng = from_lng
-    self.to_lat = to_lat
-    self.to_lng = to_lng
 
   def read(self, iprot):
     if iprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None and fastbinary is not None:
@@ -81,26 +69,6 @@ class Path:
           self.to_place = iprot.readString()
         else:
           iprot.skip(ftype)
-      elif fid == 5:
-        if ftype == TType.DOUBLE:
-          self.from_lat = iprot.readDouble()
-        else:
-          iprot.skip(ftype)
-      elif fid == 6:
-        if ftype == TType.DOUBLE:
-          self.from_lng = iprot.readDouble()
-        else:
-          iprot.skip(ftype)
-      elif fid == 7:
-        if ftype == TType.DOUBLE:
-          self.to_lat = iprot.readDouble()
-        else:
-          iprot.skip(ftype)
-      elif fid == 8:
-        if ftype == TType.DOUBLE:
-          self.to_lng = iprot.readDouble()
-        else:
-          iprot.skip(ftype)
       else:
         iprot.skip(ftype)
       iprot.readFieldEnd()
@@ -127,22 +95,6 @@ class Path:
       oprot.writeFieldBegin('to_place', TType.STRING, 4)
       oprot.writeString(self.to_place)
       oprot.writeFieldEnd()
-    if self.from_lat is not None:
-      oprot.writeFieldBegin('from_lat', TType.DOUBLE, 5)
-      oprot.writeDouble(self.from_lat)
-      oprot.writeFieldEnd()
-    if self.from_lng is not None:
-      oprot.writeFieldBegin('from_lng', TType.DOUBLE, 6)
-      oprot.writeDouble(self.from_lng)
-      oprot.writeFieldEnd()
-    if self.to_lat is not None:
-      oprot.writeFieldBegin('to_lat', TType.DOUBLE, 7)
-      oprot.writeDouble(self.to_lat)
-      oprot.writeFieldEnd()
-    if self.to_lng is not None:
-      oprot.writeFieldBegin('to_lng', TType.DOUBLE, 8)
-      oprot.writeDouble(self.to_lng)
-      oprot.writeFieldEnd()
     oprot.writeFieldStop()
     oprot.writeStructEnd()
 
@@ -156,10 +108,6 @@ class Path:
     value = (value * 31) ^ hash(self.from_place)
     value = (value * 31) ^ hash(self.to_city)
     value = (value * 31) ^ hash(self.to_place)
-    value = (value * 31) ^ hash(self.from_lat)
-    value = (value * 31) ^ hash(self.from_lng)
-    value = (value * 31) ^ hash(self.to_lat)
-    value = (value * 31) ^ hash(self.to_lng)
     return value
 
   def __repr__(self):
@@ -399,18 +347,15 @@ class HistoryDriver:
   """
   Attributes:
    - drivers
-   - reduced
   """
 
   thrift_spec = (
     None, # 0
     (1, TType.SET, 'drivers', (TType.STRING,None), None, ), # 1
-    (2, TType.BOOL, 'reduced', None, False, ), # 2
   )
 
-  def __init__(self, drivers=None, reduced=thrift_spec[2][4],):
+  def __init__(self, drivers=None,):
     self.drivers = drivers
-    self.reduced = reduced
 
   def read(self, iprot):
     if iprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None and fastbinary is not None:
@@ -431,11 +376,6 @@ class HistoryDriver:
           iprot.readSetEnd()
         else:
           iprot.skip(ftype)
-      elif fid == 2:
-        if ftype == TType.BOOL:
-          self.reduced = iprot.readBool()
-        else:
-          iprot.skip(ftype)
       else:
         iprot.skip(ftype)
       iprot.readFieldEnd()
@@ -453,10 +393,6 @@ class HistoryDriver:
         oprot.writeString(iter6)
       oprot.writeSetEnd()
       oprot.writeFieldEnd()
-    if self.reduced is not None:
-      oprot.writeFieldBegin('reduced', TType.BOOL, 2)
-      oprot.writeBool(self.reduced)
-      oprot.writeFieldEnd()
     oprot.writeFieldStop()
     oprot.writeStructEnd()
 
@@ -467,7 +403,6 @@ class HistoryDriver:
   def __hash__(self):
     value = 17
     value = (value * 31) ^ hash(self.drivers)
-    value = (value * 31) ^ hash(self.reduced)
     return value
 
   def __repr__(self):
@@ -500,7 +435,7 @@ class PoolOrder:
     (2, TType.I32, 'cartype', None, None, ), # 2
     (3, TType.LIST, 'order_list', (TType.STRUCT,(Order, Order.thrift_spec)), None, ), # 3
     (4, TType.I64, 'pushtime', None, None, ), # 4
-    (5, TType.LIST, 'drivers', (TType.STRUCT,(Driver, Driver.thrift_spec)), None, ), # 5
+    (5, TType.LIST, 'drivers', (TType.STRING,None), None, ), # 5
     (6, TType.DOUBLE, 'subsidy', None, 0, ), # 6
     (7, TType.I32, 'sstype', None, 0, ), # 7
     (8, TType.I32, 'number', None, None, ), # 8
@@ -556,8 +491,7 @@ class PoolOrder:
           self.drivers = []
           (_etype16, _size13) = iprot.readListBegin()
           for _i17 in xrange(_size13):
-            _elem18 = Driver()
-            _elem18.read(iprot)
+            _elem18 = iprot.readString()
             self.drivers.append(_elem18)
           iprot.readListEnd()
         else:
@@ -608,9 +542,9 @@ class PoolOrder:
       oprot.writeFieldEnd()
     if self.drivers is not None:
       oprot.writeFieldBegin('drivers', TType.LIST, 5)
-      oprot.writeListBegin(TType.STRUCT, len(self.drivers))
+      oprot.writeListBegin(TType.STRING, len(self.drivers))
       for iter20 in self.drivers:
-        iter20.write(oprot)
+        oprot.writeString(iter20)
       oprot.writeListEnd()
       oprot.writeFieldEnd()
     if self.subsidy is not None:

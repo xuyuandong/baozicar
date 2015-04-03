@@ -30,6 +30,7 @@ void Dispatcher::Run() {
 
     } 
     
+    VLOG(5) << "dispatcher sleep " << FLAGS_sleep_msec_dispatcher << " msec";
     base::MilliSleep(FLAGS_sleep_msec_dispatcher);
   }
 }

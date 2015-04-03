@@ -572,8 +572,16 @@ void HistoryDriver::__set_drivers(const std::set<std::string> & val) {
   this->drivers = val;
 }
 
-const char* HistoryDriver::ascii_fingerprint = "CE3B5B4FE5AAD4082A2B721F0B604B21";
-const uint8_t HistoryDriver::binary_fingerprint[16] = {0xCE,0x3B,0x5B,0x4F,0xE5,0xAA,0xD4,0x08,0x2A,0x2B,0x72,0x1F,0x0B,0x60,0x4B,0x21};
+void HistoryDriver::__set_reduced(const bool val) {
+  this->reduced = val;
+}
+
+void HistoryDriver::__set_update_time(const int64_t val) {
+  this->update_time = val;
+}
+
+const char* HistoryDriver::ascii_fingerprint = "386F45436DBA0A499AA232A1080C0B92";
+const uint8_t HistoryDriver::binary_fingerprint[16] = {0x38,0x6F,0x45,0x43,0x6D,0xBA,0x0A,0x49,0x9A,0xA2,0x32,0xA1,0x08,0x0C,0x0B,0x92};
 
 uint32_t HistoryDriver::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -616,6 +624,22 @@ uint32_t HistoryDriver::read(::apache::thrift::protocol::TProtocol* iprot) {
           xfer += iprot->skip(ftype);
         }
         break;
+      case 2:
+        if (ftype == ::apache::thrift::protocol::T_BOOL) {
+          xfer += iprot->readBool(this->reduced);
+          this->__isset.reduced = true;
+        } else {
+          xfer += iprot->skip(ftype);
+        }
+        break;
+      case 3:
+        if (ftype == ::apache::thrift::protocol::T_I64) {
+          xfer += iprot->readI64(this->update_time);
+          this->__isset.update_time = true;
+        } else {
+          xfer += iprot->skip(ftype);
+        }
+        break;
       default:
         xfer += iprot->skip(ftype);
         break;
@@ -645,6 +669,14 @@ uint32_t HistoryDriver::write(::apache::thrift::protocol::TProtocol* oprot) cons
   }
   xfer += oprot->writeFieldEnd();
 
+  xfer += oprot->writeFieldBegin("reduced", ::apache::thrift::protocol::T_BOOL, 2);
+  xfer += oprot->writeBool(this->reduced);
+  xfer += oprot->writeFieldEnd();
+
+  xfer += oprot->writeFieldBegin("update_time", ::apache::thrift::protocol::T_I64, 3);
+  xfer += oprot->writeI64(this->update_time);
+  xfer += oprot->writeFieldEnd();
+
   xfer += oprot->writeFieldStop();
   xfer += oprot->writeStructEnd();
   oprot->decrementRecursionDepth();
@@ -654,15 +686,21 @@ uint32_t HistoryDriver::write(::apache::thrift::protocol::TProtocol* oprot) cons
 void swap(HistoryDriver &a, HistoryDriver &b) {
   using ::std::swap;
   swap(a.drivers, b.drivers);
+  swap(a.reduced, b.reduced);
+  swap(a.update_time, b.update_time);
   swap(a.__isset, b.__isset);
 }
 
 HistoryDriver::HistoryDriver(const HistoryDriver& other13) {
   drivers = other13.drivers;
+  reduced = other13.reduced;
+  update_time = other13.update_time;
   __isset = other13.__isset;
 }
 HistoryDriver& HistoryDriver::operator=(const HistoryDriver& other14) {
   drivers = other14.drivers;
+  reduced = other14.reduced;
+  update_time = other14.update_time;
   __isset = other14.__isset;
   return *this;
 }
@@ -670,6 +708,8 @@ std::ostream& operator<<(std::ostream& out, const HistoryDriver& obj) {
   using apache::thrift::to_string;
   out << "HistoryDriver(";
   out << "drivers=" << to_string(obj.drivers);
+  out << ", " << "reduced=" << to_string(obj.reduced);
+  out << ", " << "update_time=" << to_string(obj.update_time);
   out << ")";
   return out;
 }

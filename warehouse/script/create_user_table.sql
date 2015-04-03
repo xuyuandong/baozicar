@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS t_user (
 
 
 CREATE TABLE IF NOT EXISTS t_order (
-  id          INT(10) NOT NULL AUTO_INCREMENT,
+  id          BIGINT(20) UNSIGNED NOT NULL,
   order_type  INT(2) NOT NULL,
   status      INT(2) NOT NULL,
   phone       VARCHAR(16) NOT NULL,
@@ -25,15 +25,15 @@ CREATE TABLE IF NOT EXISTS t_order (
   to_place    VARCHAR(255) NOT NULL,
   num         INT(2) NOT NULL,
   msg         VARCHAR(255) NOT NULL,
-  pay_id      INT(10) NOT NULL COMMENT '-1 NOT PAY, refilled',
+  pay_id      BIGINT(20) UNSIGNED NOT NULL COMMENT '0 NOT PAY',
   price       FLOAT(8,3) NOT NULL,
   fact_price  FLOAT(8,3) NOT NULL,
-  coupon_id    VARCHAR(10) NOT NULL,
+  coupon_id    BIGINT(20) UNSIGNED NOT NULL COMMENT '0 NOT PAY',
   coupon_price FLOAT(8,3) NOT NULL,
-  from_lat     DOUBLE(10,8) NOT NULL,
-  from_lng     DOUBLE(10,8) NOT NULL,
-  to_lat       DOUBLE(10,8) NOT NULL,
-  to_lng       DOUBLE(10,8) NOT NULL,
+  from_lat     DOUBLE(11,8) NOT NULL,
+  from_lng     DOUBLE(11,8) NOT NULL,
+  to_lat       DOUBLE(11,8) NOT NULL,
+  to_lng       DOUBLE(11,8) NOT NULL,
   last_modify TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   dt          TIMESTAMP NOT NULL DEFAULT 0,
   PRIMARY KEY (id),
@@ -41,9 +41,9 @@ CREATE TABLE IF NOT EXISTS t_order (
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS t_payment (
-  id           INT(10) NOT NULL AUTO_INCREMENT,
+  id           BIGINT(20) UNSIGNED NOT NULL,
   trade_no     VARCHAR(32) NOT NULL,
-  order_id     INT(10) NOT NULL,
+  order_id     BIGINT(20) UNSIGNED NOT NULL,
   price        FLOAT(8,3) NOT NULL,
   status       INT(2)  NOT NULL,
   buyer        VARCHAR(32)  NOT NULL,
@@ -55,12 +55,12 @@ CREATE TABLE IF NOT EXISTS t_payment (
   extra_info   VARCHAR(255) NOT NULL,
   last_modify TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   dt          TIMESTAMP NOT NULL DEFAULT 0,
-  PRIMARY KEY (id, trade_no),
+  PRIMARY KEY (id),
   INDEX (order_id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS t_coupon (
-  id       INT(10) NOT NULL AUTO_INCREMENT,
+  id       BIGINT(20) UNSIGNED NOT NULL,
   ctype    INT(2) NOT NULL,
   status   INT(2) NOT NULL,
   price    FLOAT(8,3) NOT NULL,
