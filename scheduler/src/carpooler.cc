@@ -208,7 +208,7 @@ void Carpooler::BatchClustering(const std::string& path_id, std::vector<PoolOrde
 int Carpooler::GetSubsidyPrice(const std::string& path_id) {
   int subsidy_price = -1;
   base::ReplyObj robj;
-  robj = path_rsm_.Get(path_id, "price");
+  robj = path_rsm_.Get(path_id, "pc_price");
   if (robj.OK()) {
     std::string price_str(robj.Str());
     subsidy_price = StringToInt(price_str);

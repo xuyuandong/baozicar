@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
-__author__ = 'wei'
+import sys                                      
+reload(sys)
+sys.setdefaultencoding('utf-8')
 
 import hashlib
 import time
@@ -7,6 +9,9 @@ import urllib2
 import json
 import base64
 import os
+
+import tornado
+from tornado.log import app_log
 
 from igetui.igt_message import *
 
@@ -285,7 +290,12 @@ class IGeTui:
             except:
                 isFail = True
                 tryTime += 1
-                print("try " + str(tryTime) + " time failed, time out.")
+                #print("try " + str(tryTime) + " time failed, time out.")
+                app_log.error("try " + str(tryTime) + " time failed, time out.")
+        
+        if isFail and tryTime == retry_time_limit:
+          app_log.error("try " + str(tryTime) + " time failed, time out")
+          return {'result':'timeout'}
 
         page_str = res_stream.read()
         page_dict = eval(page_str)

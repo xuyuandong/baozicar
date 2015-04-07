@@ -25,28 +25,6 @@ class TestClearSystemHandler(BaseHandler):
     pipe.delete('h_history_driver')
     pipe.delete('h_lock')
 
-# /test_add_driver
-class TestAddDriverHandler(BaseHandler):
-  def post(self):
-    phone = self.get_argument('phone')
-    dev_id = self.get_argument('dev_id')
-    name = self.get_argument('name')
-    from_city = self.get_argument('from_city')
-    to_city = self.get_argument('to_city')
-    priority = self.get_argument('priority')
-
-    table = 'cardb.t_driver'
-    sql = "insert into %s\
-        (phone, dev, name, image, license, carno, \
-        status, from_city, to_city, priority) \
-        values ('%s', '%s', '%s', '', '', '',\
-        0, '%s', '%s', %s);"%(phone, dev_id, name, from_city, to_city, priority)
-    self.db.execute(sql)
-
-    path_rpq = 'z_driver_' + '-'.join([from_city, to_city])
-    self.r.zadd(path_rpq, phone=int(priority))
-
-
 # /test_insert
 class TestInsertHandler(BaseHandler):
   def get(self):

@@ -20,7 +20,7 @@ from thrift.TSerialization import *
 # poolorder_type: 0 carpool 1 specialcar 2 all
 # poolorder_status: 0 wait 1 confirm 2 ongoing 3 done 4 cancel
 ##############################################################
-from base import TempType, PushType, AppType, OrderType, OrderStatus, OLType
+from base import LoginType, TempType, PushType, AppType, OrderType, OrderStatus, OLType
 from base import POType, POStatus, CouponStatus, DriverStatus
 from base import BaseHandler
 from ttypes import Path, Order, PoolOrder, Message
@@ -32,8 +32,8 @@ class DriverLoginHandler(BaseHandler):
 
   @tornado.web.asynchronous
   @tornado.gen.coroutine
-  def get(self):
-  #def post(self):
+  #def get(self):
+  def post(self):
     phone = self.get_argument('phone')
     authcode = self.get_argument('authcode')
     dev_id = self.get_argument('dev_id')
@@ -41,18 +41,20 @@ class DriverLoginHandler(BaseHandler):
 
     # check authcode
     if authcode != self.r.get(options.authcode_rpf + phone):
-      self.write({"status_code":201, "error_msg":"auth code error"})
+      #self.write({"status_code":201, "error_msg":"auth code error"})
+      self.write({"status_code":201, "error_msg":u"验证码错误"})
       return
 
     # unique user profile mapping: phone -> (device, push_id)
     rkey = options.login_rpf + phone
-    if dev_id != self.r.hget(rkey, 'device'):
+    if dev_id != self.r.hget(rkey, 'device') or str(LoginType.driver) != self.r.hget(rkey, 't'):
       # async bind push_id
       if not ( yield self.async_bind(phone, push_id) ):
-        self.write({"status_code":201, "error_msg":"bind push_id error"})
+        #self.write({"status_code":201, "error_msg":"bind push_id error"})
+        self.write({"status_code":201, "error_msg":u"未能绑定消息推送"})
         return
       # device <-> push_id is one one mapping 
-      self.r.hmset(rkey, {'device':dev_id, 'push':push_id})
+      self.r.hmset(rkey, {'device':dev_id, 'push':push_id, 't':LoginType.driver})
 
     # update status, join scheduler
     self.join_scheduler(phone)
@@ -75,17 +77,21 @@ class DriverLoginHandler(BaseHandler):
     # check driver information
     if obj is None or len(obj) == 0:
       app_log.info('driver is not registered in our sysytem')
-      self.write({'status_code':201, 'error_msg':'driver is not registered in our system'})
+      #self.write({'status_code':201, 'error_msg':'driver is not registered in our system'})
+      self.write({'status_code':201, 'error_msg':u'该号码尚未通过司机信息审核'})
       return
-     
+    
+    driver_status = DriverStatus.busy
     if obj.status != DriverStatus.busy:
-      # update driver status
-      sql = "update %s set status=%s where phone='%s'"%(table, DriverStatus.online, phone)
-      self.db.execute(sql)
+      # when login, make sure driver status is offline
+      driver_status = DriverStatus.offline
 
-      # add to scheduler
+      sql = "update %s set status=%s where phone='%s'"%(table, DriverStatus.offline, phone)
+      self.db.execute(sql)
+      # remove from scheduler
       path_rpq = options.driver_rpq + '-'.join([obj.from_city, obj.to_city])
-      self.r.zadd(path_rpq, phone, obj.priority)
+      self.r.zrem(path_rpq, phone)
+      #self.r.zadd(path_rpq, phone, obj.priority)
 
     # access token
     token = self.set_secure_cookie(options.token_key, phone)
@@ -96,8 +102,9 @@ class DriverLoginHandler(BaseHandler):
         'name':obj.name, 
         'from_city':obj.from_city, 
         'to_city':obj.to_city,
-        'driver_status':obj.status
+        'driver_status':driver_status
         }
+    app_log.info(msg)
     self.write(msg)
 
 # =============================================
@@ -105,13 +112,13 @@ class DriverLoginHandler(BaseHandler):
 # /change_driver_status
 class DriverChangeStatusHandler(BaseHandler):
   @base.authenticated
-  def get(self):
-  #def post(self):
+  #def get(self):
+  def post(self):
     phone = self.current_user
-    status = self.get_argument('status')
+    status = int(self.get_argument('status'))
     
     # check target status 
-    if int(status) == DriverStatus.busy:
+    if status == DriverStatus.busy:
       self.write({'status_code':201, 'error_msg':'you cannot change to busy status'})
       return
 
@@ -123,7 +130,8 @@ class DriverChangeStatusHandler(BaseHandler):
     
     # check current status
     if route.status == DriverStatus.busy:
-      self.write({'status_code':201, 'error_msg':'you do not finish your job, cannot change status'})
+      #self.write({'status_code':201, 'error_msg':'you do not finish your job, cannot change status'})
+      self.write({'status_code':201, 'error_msg':u'您有未完成的订单，不能改变状态'})
       return
 
     # update status
@@ -133,7 +141,7 @@ class DriverChangeStatusHandler(BaseHandler):
     # update redis scheduler
     path_rpq = options.driver_rpq + '-'.join([route.from_city, route.to_city])
     result = 0
-    if int(status) == DriverStatus.offline: # online -> offline
+    if status == DriverStatus.offline: # online -> offline
       result = self.r.zrem(path_rpq, phone)
     else:  # offline -> online
       result = self.r.zadd(path_rpq, phone, route.priority)
@@ -142,22 +150,29 @@ class DriverChangeStatusHandler(BaseHandler):
     if result == 1:
       self.write({'status_code':200, 'error_msg':''})
     else:
-      self.write({'status_code':201, 'error_msg':'failed to change status'})
+      #self.write({'status_code':201, 'error_msg':'already in target status'})
+      self.write({'status_code':201, 'error_msg':u'系统错误，已经是该状态'})
 
 
 # /change_driver_route
 class DriverChangeRouteHandler(BaseHandler):
   @base.authenticated
-  def get(self):
-  #def post(self):
+  #def get(self):
+  def post(self):
     phone = self.current_user
     from_city = self.get_argument('from_city')
     to_city = self.get_argument('to_city')
 
     # select priority
     table = 'cardb.t_driver'
-    sql = "select priority from %s where phone='%s' limit 1"%(table, phone)
+    sql = "select status, priority from %s where phone='%s' limit 1"%(table, phone)
     obj = self.db.get(sql)
+
+    # check current status
+    if obj.status == DriverStatus.busy:
+      #self.write({'status_code':201, 'error_msg':'you do not finish your job, cannot change route'})
+      self.write({'status_code':201, 'error_msg':u'您有未完成的订单，不能改变路线'})
+      return
 
     # update mysql
     sql = "update %s set from_city='%s', to_city='%s' where phone='%s'"\
@@ -181,8 +196,8 @@ class DriverChangeRouteHandler(BaseHandler):
 # /get_poolorder_list
 class GetPoolOrderListHandler(BaseHandler):
   @base.authenticated
-  def get(self):
-  #def post(self):
+  #def get(self):
+  def post(self):
     phone = self.current_user
     date = self.get_argument('date')
     poltype = self.get_argument('poolorder_list_type')
@@ -201,12 +216,16 @@ class GetPoolOrderListHandler(BaseHandler):
 
     sql = "select id, po_type, status, from_city, to_city, price, dt\
         from %s where phone='%s' %s order by dt"%(table, phone, condition)
-    objlist = self.db.query(sql)
+    try:
+      objlist = self.db.query(sql)
+    except Exception, e:
+      app_log.error('exception %s', e)
+      objlist = []
 
     # poolorder list
     polist = [{
        'poolorder_id': obj.id,
-       'poolorder_date': obj.dt.strftime("%Y-%m-%d %H:%M:%S"),
+       'poolorder_date': base.UTC2CST(obj.dt),
        'poolorder_type': obj.po_type,
        'poolorder_status': obj.status,
        'from_city': obj.from_city,
@@ -218,7 +237,7 @@ class GetPoolOrderListHandler(BaseHandler):
     msg = {
         'status_code':200,
         'error_msg':'',
-        'poolorder_count':1,
+        'poolorder_count':len(polist),
         'poolorder_infos': polist
         }
     self.write(msg)
@@ -227,8 +246,8 @@ class GetPoolOrderListHandler(BaseHandler):
 # /get_poolorder_detail
 class GetPoolOrderDetailHandler(BaseHandler):
   @base.authenticated
-  def get(self):
-  #def post(self):
+  #def get(self):
+  def post(self):
     phone = self.current_user
     date = self.get_argument('date')
     poid = self.get_argument('poolorder_id')
@@ -257,7 +276,14 @@ class GetPoolOrderDetailHandler(BaseHandler):
           from %s where id=%s"%(table, oid) for oid in orderids ]
     sql = " union all ".join(sqls) if len(orderids) > 1 else sqls[0]
 
-    orders = self.db.query(sql)
+    # query mysql
+    try:
+      orders = self.db.query(sql)
+    except Exception, e:
+      app_log.error('exception %s', e)
+      orders = []
+
+    # result 
     uinfos = [{
         'name': order.name,
         'phone': order.phone,
@@ -289,8 +315,8 @@ class GetPoolOrderDetailHandler(BaseHandler):
 # /change_poolorder_status
 class ChangePoolOrderStatusHandler(BaseHandler):
   @base.authenticated
-  def get(self):
-  #def post(self):
+  #def get(self):
+  def post(self):
     phone = self.current_user
 
     # confirm->32bit string id, else->integer id
@@ -315,8 +341,9 @@ class ChangePoolOrderStatusHandler(BaseHandler):
     postr = self.r.hget(options.poolorder_rm, poid)
     if postr is None or len(postr) == 0: # failed
       self.write({'status_code':201, \
-          'temp_poolorder_id': poid, \
-          'error_msg':'already canceled by user or confirmed by other driver'})
+          'temp_poolorder_id': poid, 'is_new':True, \
+          'error_msg':u'该订单已取消或已被其他司机接单了'})
+          #'error_msg':'already canceled by user or confirmed by other driver'})
       return
 
     # get orders from poolorder thrift object
@@ -331,7 +358,9 @@ class ChangePoolOrderStatusHandler(BaseHandler):
     # lock the driver
     priority = self.__confirm_lock_driver(phone, path) 
     if priority < 0: # already try confirm in another poolorder
-      self.write({'status_code':201, 'error_msg':'you are trying confirm another poolorder'})
+      self.write({'status_code':201, 'is_new':True, \
+          'error_msg':u'您已经再抢其他订单了，请稍后再试'})
+          #'error_msg':'you are trying confirm another poolorder'})
       return
 
     # get sub-orders infomation
@@ -345,7 +374,8 @@ class ChangePoolOrderStatusHandler(BaseHandler):
       self.__confirm_unlock_driver(phone, path, priority)
       self.write({'status_code':201, 'is_new':True, \
           'temp_poolorder_id':poid, \
-          'error_msg':'already canceled by user or confirmed by other driver'})
+          'error_msg':u'该订单已取消或已被其他司机接单了'})
+          #'error_msg':'already canceled by user or confirmed by other driver'})
       return
 
     # successful confirm: ########
@@ -414,13 +444,14 @@ class ChangePoolOrderStatusHandler(BaseHandler):
 
   def __confirm_push_message(self, driver_phone, order_list):
     pushmsg = Message()
-    pushmsg.template_type = TempType.trans
+    pushmsg.template_type = TempType.notify
     pushmsg.push_type = PushType.one
     pushmsg.app_type = AppType.user
     pushmsg.title = 'confirm_poolorder'
     
     for order in order_list:
-      jdict = { 'driver_phone': driver_phone,
+      jdict = { 'title': 'confirm_poolorder',
+          'driver_phone': driver_phone,
           'order_id': order.id }
       pushmsg.content = json.dumps(jdict)
       pushmsg.target = [order.phone]
@@ -478,13 +509,14 @@ class ChangePoolOrderStatusHandler(BaseHandler):
 
     # push messages
     pushmsg = Message()
-    pushmsg.template_type = TempType.trans
+    pushmsg.template_type = TempType.notify
     pushmsg.push_type = PushType.one
     pushmsg.app_type = AppType.user
     pushmsg.title = 'ongoing_poolorder'
     
     for order in objlist:
-      jdict = { 'driver_phone': driver_phone,
+      jdict = { 'title': 'ongoing_poolorder',
+          'driver_phone': driver_phone,
           'order_id': order.id }
       pushmsg.content = json.dumps(jdict)
       pushmsg.target = [order.phone]
@@ -494,16 +526,21 @@ class ChangePoolOrderStatusHandler(BaseHandler):
 
 
   def done(self, phone, poid):
-    # update poolorder status
     table = 'cardb.t_poolorder'
+    # select orders from poolorder
+    sql = "select status, orders from %s where id=%s limit 1"%(table, poid)
+    obj = self.db.get(sql)
+
+    # protect redo multiple times
+    if obj.status == POStatus.done:
+      self.write({'status_code':200, 'error_msg':'', 'is_new':False, 'poolorder_id':poid})
+      return
+
+    # update poolorder status
     sql = "update %s set status=%s where id=%s"%(table, POStatus.done, poid)
     self.db.execute(sql)
-
-    # select orders from poolorder
-    sql = "select orders from %s where id=%s limit 1"%(table, poid)
-    obj = self.db.get(sql)
+    
     orderids = obj.orders.split(',')
-
     # update order status
     table = 'cardb.t_order'
     order_condition = ','.join([str(oid) for oid in orderids])
@@ -531,14 +568,14 @@ class ChangePoolOrderStatusHandler(BaseHandler):
 
 # /cancel_poolorder
 class CancelPoolOrderHandler(BaseHandler):
-  def get(self):
-  #def post(self):
+  #def get(self):
+  def post(self):
     phone = self.get_argument('phone')
     poid = self.get_argument('poolorder_id')
     super_token = self.get_argument('super_token')
     
     if super_token != options.super_token:
-      self.write('Permission denied!')
+      self.write({'status_code':201, error_msg:'Permission denied!'})
       return
     self.cancel(phone, poid)
   
@@ -580,9 +617,9 @@ class CancelPoolOrderHandler(BaseHandler):
       order.number = obj.num
       order.cartype = obj.order_type
 
-      #dtstr = obj.dt.strftime("%Y-%m-%d %H:%M:%S"),
-      #dtarray = time.strptime(dtstr, "%Y-%m-%d %H:%M:%S")
-      order.time = int(time.mktime(obj.dt))
+      dt_str = obj.dt.strftime("%Y-%m-%d %H:%M:%S")
+      dt_arr = time.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
+      order.time = (time.mktime(dt_arr) + 3600*8)
 
       thrift_obj = serialize(order)
       
@@ -593,13 +630,14 @@ class CancelPoolOrderHandler(BaseHandler):
 
     # push cancelled message to users
     pushmsg = Message()
-    pushmsg.template_type = TempType.trans
+    pushmsg.template_type = TempType.notify
     pushmsg.push_type = PushType.one
     pushmsg.app_type = AppType.user
     pushmsg.title = 'cancel_poolorder'
     
     for obj in objlist: 
-      jdict = {'driver_phone':driver_phone,
+      jdict = { 'title':'cancel_poolorder',
+        'driver_phone':driver_phone,
         'order_id':obj.id
         }
       pushmsg.content = json.dumps(jdict)
@@ -621,12 +659,13 @@ class CancelPoolOrderHandler(BaseHandler):
 # /read_pushed_poolorder
 class ReadPushedPoolOrderHandler(BaseHandler):
   @base.authenticated
-  def get(self):
-  #def post(self):
+  #def get(self):
+  def post(self):
     poid = self.get_argument('poolorder_id')
     postr = self.r.hget(options.poolorder_rm, poid)
     if postr is None or len(postr) == 0: # failed
-      self.write({'status_code':201, 'error_msg':'already canceled or confirmed'})
+      #self.write({'status_code':201, 'error_msg':'already canceled or confirmed'})
+      self.write({'status_code':201, 'error_msg':u'该订单已取消或已被其他司机接单了'})
       return
 
     # get orders from poolorder thrift object
@@ -668,3 +707,24 @@ class ReadPushedPoolOrderHandler(BaseHandler):
         }
     self.write(msg)
 
+
+# /get_driver_data
+class GetDriverDataHandler(BaseHandler):
+  @base.authenticated
+  #def get(self):
+  def post(self):
+    phone = self.current_user
+
+    date = self.get_argument('date')
+    today = time.strptime(date, '%Y%m%d')
+    today_str = time.strftime('%Y-%m-%d %H:%M:%S', today)
+
+    table = 'cardb.t_poolorder'
+    sql = "select sum(price) as income from %s where phone='%s' and status=%s \
+        and last_modify>'%s'"%(table, phone, POStatus.done, today_str)
+    obj = self.db.get(sql)
+
+    msg = {'status_code':200, 
+        'error_msg':'',
+        'income_today': obj.income}
+    self.write(msg)

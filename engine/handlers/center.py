@@ -16,17 +16,22 @@ from math import *
 
 import base
 from base import BaseHandler
+from base import TempType, PushType, AppType, OrderType, OrderStatus, OLType
+from base import POType, POStatus, CouponStatus, DriverStatus
+from base import BaseHandler
+from ttypes import Path, Order, Message
 
 define("baidu_direction_url", \
     default='http://api.map.baidu.com/direction/v1?mode=driving&output=json&', help='')
 define("baidu_api_key", default='ak=286e2613aa2e671c497b40cdcc5f06e7', help='')
-
 
 # ========================================
 # system
 
 # /
 class HomeHandler(BaseHandler):
+  @base.access_restricted
+  # def post(self):
   def get(self):
     self.write("hello, please login, idiot")
 
@@ -36,7 +41,7 @@ class GetAuthCodeHandler(BaseHandler):
   @tornado.gen.coroutine
   def get(self):
     phone = self.get_argument("phone")
-    authcode = '1234' #str(random.randint(1000, 9999))
+    authcode = str(random.randint(1000, 9999))
 
     result = ''
     try:
@@ -44,19 +49,21 @@ class GetAuthCodeHandler(BaseHandler):
       response = yield self.sendsms(phone, authcode)
       result = response.body
     except Exception, e:
-      print 'exception', e
-      self.write({'status_code':201, 'error_msg':'system exception'})
+      app_log.error('sms exception %s', e)
+      #self.write({'status_code':201, 'error_msg':'system exception'})
+      self.write({'status_code':201, 'error_msg':u'发送验证码失败'})
 
     if len(result) > 0 and result[0] == '0':
-      print 'result', result
       self.write({'status_code':200, 'error_msg':''})
     else:
-      print 'error', result
-      self.write({'status_code':201, 'error_msg':'failed to send sms'})
+      app_log.info('sms error %s', result)
+      #self.write({'status_code':201, 'error_msg':'failed to send sms'})
+      self.write({'status_code':201, 'error_msg':u'发送验证码失败'})
 
 
   def sendsms(self, phone, authcode):
-    content='尊敬的用户，您好！感谢您选择包子拼车，包子拼车验证码%s已发送到您手机上，美好城市绿色出行，包子拼车为您导航。'%(authcode)
+    #content='尊敬的用户，您好！感谢您选择包子拼车，包子拼车验证码%s已发送到您手机上，美好城市绿色出行，包子拼车为您导航。'%(authcode)
+    content = '验证码为%s。'%(authcode)
     bodylist= ['corp_id=7f24003',
         'corp_pwd=f24003',
         'corp_service=10690116yd',
@@ -75,8 +82,8 @@ class GetAuthCodeHandler(BaseHandler):
 # /query_path
 class QueryPathHandler(BaseHandler):
   #@base.authenticated
-  def get(self):
-  #def post(self): # TODO: check api
+  #def get(self):
+  def post(self): # TODO: check api
     from_city = self.get_argument('from_city')
 
     table = 'cardb.t_path'
@@ -95,8 +102,8 @@ class QueryPathHandler(BaseHandler):
 # /query_price
 class QueryPriceHandler(BaseHandler):
   #@base.authenticated
-  def get(self):
-  #def post(self):
+  #def get(self):
+  def post(self):
     from_city = self.get_argument('from_city')
     from_place = self.get_argument('from_place')
     from_lat = float(self.get_argument('from_lat'))
@@ -107,13 +114,15 @@ class QueryPriceHandler(BaseHandler):
     to_lat = float(self.get_argument('to_lat'))
     to_lng = float(self.get_argument('to_lng'))
     
-    person_num = self.get_argument('person_num')
+    person_num = int(self.get_argument('person_num'))
+    order_type = int(self.get_argument('order_type'))
 
     # get path infomation from redis
     path = options.path_rpf + '-'.join([from_city, to_city])
     path_obj = self.r.hgetall(path)
     if path_obj is None or len(path_obj) < 15:
-      self.write({'status_code':201, 'error_msg':'No information for this path in redis'})
+      #self.write({'status_code':201, 'error_msg':'No information for this path in redis'})
+      self.write({'status_code':201, 'error_msg':u'系统中不存在此线路信息'})
       return
 
     # calculate from and to in city place distance
@@ -121,22 +130,34 @@ class QueryPriceHandler(BaseHandler):
     src_lng = float(path_obj['from_lng'])
     src_scale = float(path_obj['from_scale'])
     from_dist = src_scale * self.calc_distance(from_lat, from_lng, src_lat, src_lng)
-    
+
     dst_lat = float(path_obj['to_lat'])
     dst_lng = float(path_obj['to_lng'])
     dst_scale = float(path_obj['to_scale'])
     to_dist = dst_scale * self.calc_distance(to_lat, to_lng, dst_lat, dst_lng)
- 
+
     # calculate price
     hour = 'h%s'%(time.localtime().tm_hour)
     hour_price = float(path_obj.get(hour, 0))
-    from_price = max( 0, \
-        (from_dist - float(path_obj['from_discount'])) * float(path_obj['from_step']) )
-    to_price = max(0, \
-        (to_dist - float(path_obj['to_discount'])) * float(path_obj['to_step']) )
-    path_price = float(path_obj['price']) * int(person_num)
+   
+    # from - to city price
+    from_step = path_obj['from_pc_step'] if order_type == OrderType.carpool \
+        else path_obj['from_bc_step'] 
+    to_step = path_obj['to_pc_step'] if order_type == OrderType.carpool \
+        else path_obj['to_bc_step'] 
 
+    from_price = max( 0, \
+        (from_dist - float(path_obj['from_discount'])) * float(from_step) )
+    to_price = max(0, \
+        (to_dist - float(path_obj['to_discount'])) * float(to_step) )
+
+    # between city price
+    path_price = float(path_obj['pc_price']) * person_num if order_type == OrderType.carpool \
+        else float(path_obj['bc_price'])
+
+    # total price
     total_price = from_price + path_price + to_price + hour_price 
+    taxi_price = 4.6 * self.calc_distance(to_lat, to_lng, from_lat, from_lng)
 
     # result
     msg = {
@@ -146,8 +167,10 @@ class QueryPriceHandler(BaseHandler):
         'from_price': from_price,
         'to_price': to_price,
         'path_price': path_price,
-        'hour_price': hour_price
+        'hour_price': hour_price,
+        'taxi_price': taxi_price
         }
+    app_log.info(msg)
     self.write(msg)
 
   def calc_distance(self, lat1, lng1, lat2, lng2):
@@ -248,6 +271,9 @@ class FeedbackHandler(BaseHandler):
   def post(self):
     phone = self.current_user
     content = self.get_argument('content')
+
+    if len(content) > 1024:
+      content = content[0:1024]
 
     table = 'cardb.t_feedback'
     sql = "insert into %s (phone, content) \

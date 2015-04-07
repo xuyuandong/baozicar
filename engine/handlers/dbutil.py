@@ -4,9 +4,9 @@ from tornado.options import define, options
 import torndb
 
 define("mysql_host", default="/var/lib/mysql/mysql.sock", help="mysql host")
-define("mysql_db", default="test_db", help="mysql database")
+define("mysql_db", default="cardb", help="mysql database")
 define("mysql_user", default="root", help="mysql user")
-define("mysql_password", default="bjgzz+318", help="mysql password")
+define("mysql_password", default="showmeng1234", help="mysql password")
 
 class DBUtil:
   def __init__(self):

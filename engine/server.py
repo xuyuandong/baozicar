@@ -9,8 +9,9 @@ import tornado.httpserver
 from tornado.options import define, options
 
 import redis
-import logging
 import os.path
+import logging
+import logging.handlers
 
 import handlers
 from handlers.test import *
@@ -57,6 +58,7 @@ class Application(tornado.web.Application):
         (r"/change_poolorder_status", ChangePoolOrderStatusHandler),
         (r"/read_pushed_poolorder", ReadPushedPoolOrderHandler),
         (r"/cancel_poolorder", CancelPoolOrderHandler),  
+        (r"/get_driver_data", GetDriverDataHandler),  
     ]
     settings = dict(
       cookie_secret = "abcdefghijkmlnopqrstuvwxyz",
@@ -79,8 +81,22 @@ class Application(tornado.web.Application):
 
     tornado.web.Application.__init__(self, request_handlers, **settings)
 
+def SetupLogger():
+  format = '[%(levelname)1.1s %(asctime)s %(module)s:%(lineno)d] %(message)s'
+  formater = logging.Formatter(format, datefmt='%Y-%m-%d %H:%M:%S')
+  
+  log_file = 'app_log.%d' % (options.port)
+  handler = logging.handlers.RotatingFileHandler(log_file, maxBytes=10*1024*1024, backupCount=5)
+  handler.setFormatter(formater)
+  
+  logging.getLogger("tornado.access").addHandler(handler)
+  logging.getLogger("tornado.application").addHandler(handler)
+
+
 if __name__ == "__main__":
   tornado.options.parse_command_line()
+  SetupLogger()
+
   httpserver = tornado.httpserver.HTTPServer(Application(), xheaders=True)
   httpserver.listen(options.port)
   tornado.ioloop.IOLoop.instance().start()

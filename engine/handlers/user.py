@@ -26,7 +26,7 @@ except ImportError:
 # order_list_type: 0 booked 1 toeval 2 done 3 all
 # coupon_status: 0 normal 1 expired
 #####################################################################
-from base import TempType, PushType, AppType, OrderType, OrderStatus, OLType
+from base import LoginType, TempType, PushType, AppType, OrderType, OrderStatus, OLType
 from base import POType, POStatus, CouponStatus, DriverStatus
 from base import BaseHandler
 from ttypes import Path, Order, Message
@@ -38,8 +38,8 @@ class UserLoginHandler(BaseHandler):
 
   @tornado.web.asynchronous
   @tornado.gen.coroutine
-  def get(self):
-  #def post(self):
+  #def get(self):
+  def post(self):
     phone = self.get_argument("phone")
     authcode = self.get_argument("authcode")
     dev_id = self.get_argument("dev_id")
@@ -49,26 +49,28 @@ class UserLoginHandler(BaseHandler):
 
     # check authcode
     if authcode != self.r.get(options.authcode_rpf + phone):
-      self.write({"status_code":201, "error_msg":"auth code error"})
+      #self.write({"status_code":201, "error_msg":"auth code error"})
+      self.write({"status_code":201, "error_msg":u"验证码错误"})
       return
 
     # unique user profile mapping: phone -> (device, push_id)
     rkey = options.login_rpf + phone
-    if dev_id != self.r.hget(rkey, 'device'):
+    if dev_id != self.r.hget(rkey, 'device') or str(LoginType.user) != self.r.hget(rkey, 't'):
       # async bind push_id
       if not ( yield self.async_bind(phone, push_id) ):
-        self.write({"status_code":201, "error_msg":"bind push_id error"})
+        #self.write({"status_code":201, "error_msg":"bind push_id error"})
+        self.write({"status_code":201, "error_msg":u"未能绑定消息推送"})
         return
 
       # device <-> push_id is one one mapping 
-      self.r.hmset(rkey, {'device':dev_id, 'push':push_id, 'name':name})
+      self.r.hmset(rkey, {'device':dev_id, 'push':push_id, 'name':name, 't':LoginType.user})
 
 
     # insert into mysql
     table = 'cardb.t_user'
     sql = "insert into %s (phone, dev, name, image)\
         values ('%s', '%s', '%s', '') \
-        on duplicate key update dev='%s'"%(table, phone, dev_id, dev_id, name)
+        on duplicate key update dev='%s'"%(table, phone, dev_id, name, dev_id)
     self.db.execute(sql)
 
     # return token
@@ -85,8 +87,8 @@ class UserLoginHandler(BaseHandler):
 # /save_profile
 class SaveProfileHandler(BaseHandler):
   @base.authenticated
-  def get(self):
-  #def post(self):
+  #def get(self):
+  def post(self):
     phone = self.current_user
     name = self.get_argument('name')
     gender = self.get_argument('gender')
@@ -100,8 +102,8 @@ class SaveProfileHandler(BaseHandler):
 # /get_coupon_list
 class GetCouponListHandler(BaseHandler):
   @base.authenticated
-  def get(self):
-  #def post(self):
+  #def get(self):
+  def post(self):
     phone = self.current_user
 
     # select coupon from mysql, with expired <N days coupon
@@ -132,19 +134,26 @@ class GetCouponListHandler(BaseHandler):
 # /select_coupon
 class SelectCouponHandler(BaseHandler):
   @base.authenticated
-  def get(self):
-  #def post(self):
+  #def get(self):
+  def post(self):
     order_id = self.get_argument('order_id')
     coupon_id = self.get_argument('coupon_id')
     coupon_price = self.get_argument('coupon_price')
 
+    table = 'cardb.t_coupon'
+    sql = "select status from %s where id=%s limit 1"%(table, coupon_id)
+    obj = self.db.get(sql)
+
+    if obj is None or obj.status != CouponStatus.normal:
+      self.write({'status_code':201, 'error_msg':'The coupon is invalid'})
+      return
+
+    sql = "update %s set status=%s where id=%s"%(table, CouponStatus.locked, coupon_id)
+    self.db.execute(sql)
+
     table = 'cardb.t_order'
     sql = "update %s set coupon_id=%s, coupon_price=%s \
         where id=%s"%(table, coupon_id, coupon_price, order_id)
-    self.db.execute(sql)
-
-    table = 'cardb.t_coupon'
-    sql = "update %s set status=%s where id=%s"%(table, CouponStatus.locked, coupon_id)
     self.db.execute(sql)
 
     self.write({'status_code':200, 'error_msg':''})
@@ -153,8 +162,8 @@ class SelectCouponHandler(BaseHandler):
 # /exchange_coupon
 class ExchangeCouponHandler(BaseHandler):
   #@base.authenticated
-  def get(self):
-  #def post(self):
+  #def get(self):
+  def post(self):
     phone = self.get_argument("phone")
     code = self.get_argument("key")
 
@@ -162,7 +171,8 @@ class ExchangeCouponHandler(BaseHandler):
     ckey = 'c_' + code
     coupon = self.r.hgetall(ckey)
     if not coupon:
-      self.write({'status_code':201, 'error_msg':'invalid coupon'})
+      #self.write({'status_code':201, 'error_msg':'invalid coupon'})
+      self.write({'status_code':201, 'error_msg':u'无效的优惠券兑换码'})
       return
 
     # check already exchange
@@ -188,7 +198,8 @@ class ExchangeCouponHandler(BaseHandler):
 
     # reduce coupon number
     if 0 > self.r.hincrby(ckey, 'num', -1):
-      self.write({'status_code':201, 'error_msg':'coupon exhausted'})
+      #self.write({'status_code':201, 'error_msg':'coupon exhausted'})
+      self.write({'status_code':201, 'error_msg':u'优惠券被抢光了'})
       return
 
     # insert into mysql db
@@ -225,8 +236,8 @@ class ExchangeCouponHandler(BaseHandler):
 # /submit_order
 class SubmitOrderHandler(BaseHandler):
   @base.authenticated
-  def get(self):
-  #def post(self):
+  #def get(self):
+  def post(self):
     phone = self.current_user
 
     order_type = self.get_argument("order_type")
@@ -288,10 +299,16 @@ class SubmitOrderHandler(BaseHandler):
 # /cancel_order
 class CancelOrderHandler(BaseHandler):
   @base.authenticated
-  def get(self):
-  #def post(self):
+  #def get(self):
+  def post(self):
     order_id = self.get_argument("order_id")
 
+    # if order notpay, discard
+    if self.__discard_notpay_order(order_id):
+      self.write({'status_code':200, 'error_msg':''})
+      return
+
+    # try cancel payed order
     ret = order_util.CancelOrder(self.r, order_id)
 
     if ret == 1: # success
@@ -302,9 +319,9 @@ class CancelOrderHandler(BaseHandler):
 
       # get coupon_id
       sql = "select coupon_id from %s where id=%s limit 1"%(table, order_id)
-      obj = self.db.get(sql)      
+      obj = self.db.get(sql)
       coupon_id = obj.coupon_id
-      
+
       # restore coupon_id status
       if coupon_id != 0:
         table = 'cardb.t_coupon'
@@ -313,14 +330,34 @@ class CancelOrderHandler(BaseHandler):
 
       self.write({'status_code':200, 'error_msg':''})
     else:
-      self.write({'status_code':201, 'error_msg':'failed to cancel'})
+      #self.write({'status_code':201, 'error_msg':'failed to cancel'})
+      self.write({'status_code':201, 'error_msg':u'您的订单已经被司机接单了，取消失败，请联系客服'})
+
+  def __discard_notpay_order(self, order_id):
+    table = 'cardb.t_order'
+    sql = "select status, coupon_id from %s where id=%s limit 1"%(table, order_id)
+    obj = self.db.get(sql)
+
+    if obj.status != OrderStatus.notpay:
+      return False
+
+    sql = "update %s set status=%s where id=%s"%(table, OrderStatus.discard, order_id)
+    self.db.execute(sql)
+
+    if obj.coupon_id != 0:
+      table = 'cardb.t_coupon'
+      sql = "update %s set status=%s where id=%s"%(table, CouponStatus.normal, coupon_id)
+      self.db.execute(sql)
+
+    return True
+
 
 
 # /read_confirmed_order
 class ReadConfirmedOrderHandler(BaseHandler):
   @base.authenticated
-  def get(self):
-  #def post(self): # TODO: check api
+  #def get(self):
+  def post(self): # TODO: check api
     driver = self.get_argument('driver_phone')
     order_id = self.get_argument('order_id')
     is_confirm = self.get_argument('is_confirm')
@@ -346,8 +383,8 @@ class ReadConfirmedOrderHandler(BaseHandler):
 # /get_order_list
 class GetOrderListHandler(BaseHandler):
   @base.authenticated
-  def get(self):
-  #def post(self):
+  #def get(self):
+  def post(self):
     phone = self.current_user
     date = self.get_argument("date")
 
@@ -374,12 +411,16 @@ class GetOrderListHandler(BaseHandler):
     sql = "select id, order_type, status, start_time,\
         from_city, from_place, to_city, to_place, price, coupon_price,\
         dt from %s where phone='%s' %s"%(table, phone, condition)
-    objlist = self.db.query(sql)
+    try:
+      objlist = self.db.query(sql)
+    except Exception, e:
+      app_log.error('exception %s', e)
+      objlist = []
 
     # order list json
     olist = [{
       'order_id': obj.id,
-      'order_date':obj.dt.strftime("%Y-%m-%d %H:%M:%S"),
+      'order_date':base.UTC2CST(obj.dt),
       'order_type':obj.order_type,
       'order_status':obj.status,
       'start_time':obj.start_time,
@@ -395,7 +436,7 @@ class GetOrderListHandler(BaseHandler):
     msg = {
           "status_code":200,
           "error_msg":"",
-          "order_count":1,
+          "order_count":len(olist),
           "order_infos":olist
         }
     self.write(msg)

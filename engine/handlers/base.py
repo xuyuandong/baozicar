@@ -5,6 +5,7 @@ import functools
 import redis
 
 from tornado.options import define, options
+from tornado.log import app_log
 import tornado.web
 
 define("token_key", default="token", help="token parameter name")
@@ -36,12 +37,14 @@ define('queue', default='l_message', help='redis queue for push message')
 def enum(**enums):
   return type('Enum', (), enums)
 
+LoginType = enum(user=0, driver=1)
+
 TempType = enum(trans=0, notify=1, link=2)
 PushType = enum(app=0, many=1, one=2)
 AppType = enum(user=0, driver=1)
 
 OrderType = enum(carpool=0, special=1)
-OrderStatus = enum(notpay=-1, wait=0, confirm=1, toeval=2, done=3, cancel=4)
+OrderStatus = enum(notpay=-1, wait=0, confirm=1, toeval=2, done=3, cancel=4, discard=5)
 OLType = enum(booked=0, toeval=1, done=2, all=3)
 
 POType = enum(carpool=0, special=1)
@@ -66,7 +69,7 @@ class BaseHandler(tornado.web.RequestHandler):
       return uid if devid == self.r.hget(rkey, 'device') else None
     
     except Exception, e:
-      self.reqlog.error("authenticated exception: %s", e)
+      app_log.error("authenticated exception: %s", e)
       return None
 
   def write_error(self, status_code, **kwargs):
@@ -79,10 +82,6 @@ class BaseHandler(tornado.web.RequestHandler):
   @property
   def paylog(self):
     return self.application.log.paylog
-
-  @property
-  def reqlog(self):
-    return self.application.log.reqlog
 
   @property
   def push(self):
@@ -106,6 +105,14 @@ def authenticated(method):
     return method(self, *args, **kwargs)
   return wrapper
 
+def access_restricted(method):
+  """Decorate methods that access ip restricted."""
+  @functools.wraps(method)
+  def wrapper(self, *args, **kwargs):
+    app_log.info("http access %s", self.request.remote_ip)
+    return method(self, *args, **kwargs)
+  return wrapper
+
 def uuid(phone):
   t = datetime.datetime.now()
   y = t.year%10
@@ -118,3 +125,9 @@ def uuid(phone):
 def UUID():
   return str(uuid.uuid1())
 
+def UTC2CST(dt):
+    dt_str = dt.strftime("%Y-%m-%d %H:%M:%S")
+    dt_arr = time.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
+    local_arr = time.localtime(time.mktime(dt_arr) + 3600*8)
+    local_str = time.strftime("%Y-%m-%d %H:%M:%S", local_arr)
+    return local_str

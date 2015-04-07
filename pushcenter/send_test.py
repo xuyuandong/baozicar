@@ -30,6 +30,7 @@ define("host", default = "localhost", help = "")
 define("port", default = 6379, help = "", type = int)
 define("queue", default = "l_message", help = "")
 
+define("log", default = "logs/log.", help = "")
 define("pid", default = 0, help = "process id", type = int)
 
 define("USER_APPID", default = "qlZIF87hye8ZzyifZIEMn3", help = "")
@@ -65,7 +66,7 @@ def GetNotificationTemplate(dobj):
     template.transmissionType = 2
     template.title = dobj['title']
     template.text = dobj['text']
-    template.transmissionContent = '' #dobj['content']
+    template.transmissionContent = dobj['content']
     template.logo = ""
     template.logoURL = ""
     template.isRing = True
@@ -94,93 +95,74 @@ def GetLinkTemplate(dobj):
     return template
 
 ####################################################################
-# ttype: template type, 0: Transmission, 1: Notification, 2: Link
+# ttype: template type, 0: Transmission, 1: Link, 2: Notification
 # ptype: push type, 0: App, 1: List, 2: Single
-def enum(**enums):
-  return type('Enum', (), enums)
-TempType = enum(trans=0, notify=1, link=2)
-PushType = enum(app=0, many=1, one=2)
-AppType = enum(user=0, driver=1)
 
 class PushCenter(object):
-  def __init__(self):
+  def __init__(self, name, port):
     self.pusher = {
-        AppType.user: PushUtil(options.USER_APPID, options.USER_APPKEY, options.USER_MASTERSECRET),
-        AppType.driver: PushUtil(options.SERV_APPID, options.SERV_APPKEY, options.SERV_MASTERSECRET)
+        0: PushUtil(options.USER_APPID, options.USER_APPKEY, options.USER_MASTERSECRET),
+        1: PushUtil(options.SERV_APPID, options.SERV_APPKEY, options.SERV_MASTERSECRET)
         }
     self.templateAction = {
-        TempType.trans: GetTransmissionTemplate,
-        TempType.notify: GetNotificationTemplate,
-        TempType.link: GetLinkTemplate,
+        0: GetTransmissionTemplate,
+        1: GetLinkTemplate,
+        2: GetNotificationTemplate
         }
     self.pushAction = {
-        PushType.app: lambda p, temp, tar: p.ToApp(temp, tar),
-        PushType.many: lambda p, temp, tar: p.ToList(temp, tar),
-        PushType.one: lambda p, temp, tar: p.ToSingle(temp, tar)
+        0: lambda p, temp, tar: p.ToApp(temp, tar),
+        1: lambda p, temp, tar: p.ToList(temp, tar),
+        2: lambda p, temp, tar: p.ToSingle(temp, tar)
         }
     self.translateAction = {
-        'test': self.TranslateTest,
         'poolorder': self.TranslatePoolOrder,
         'confirm_poolorder': self.TranslateConfirmOrder,
         'cancel_poolorder': self.TranslateCancelOrder,
         'system_note': self.TranslateSystemNote
         }
     self.appId = {
-        AppType.user: options.USER_APPID,
-        AppType.driver: options.SERV_APPID
+        0: options.USER_APPID,
+        1: options.SERV_APPID
         }
     self.appKey = {
-        AppType.user: options.USER_APPKEY,
-        AppType.driver: options.SERV_APPKEY
+        0: options.USER_APPKEY,
+        1: options.SERV_APPKEY
         }
+    #self.__create_logger(name, port)
   
   def push(self, tobj):
     dobj = self.__translate_message(tobj)
     app_log.info("push json\t%s", dobj)
     
+    ttype = tobj.template_type
+    template = self.templateAction.get(ttype)(dobj)
+    
     atype = tobj.app_type
     pusher = self.pusher.get(atype)
-    app_log.info("push atype %s", atype)
-
+    
     ptype = tobj.push_type
-    target = []
-    if ptype == 1:
-      target = tobj.target 
-    elif ptype == 2:
-      target = tobj.target[0]
-    else:
-      target = []
-    app_log.info("push target %s", target)
-
-    result = []
-    for temp in dobj['ttype']:
-      app_log.info("push template %s", temp)
-      template = self.templateAction.get(temp)(dobj)
-      ret = self.pushAction.get(ptype)(pusher, template, target)
-      result.append(ret)
-
-    return result
+    target = tobj.target if ptype == 1 else tobj.target[0]
+    return self.pushAction.get(ptype)(pusher, template, target)
 
   def __translate_message(self, tobj):
     title = tobj.title
     app_log.info('push translate %s', title)
     return self.translateAction.get(title)(tobj)
 
-  def TranslateTest(self, tobj):
-    d = {'ttype': [tobj.template_type],
-         'ptype': tobj.push_type,
-         'title': tobj.title,
-         'text':  tobj.text,
-         'url':   tobj.url,
-         'content': tobj.content,
-         'target':tobj.target,
-         'APPID': self.appId[tobj.app_type],
-         'APPKEY':self.appKey[tobj.app_type]
-        }
-    return d
+  def __create_logger(self, name, port):
+    datefmt = '%Y-%m-%d %H:%M:%S'
+    timed_format = '%(asctime)s.%(msecs)d %(message)s'
+    timedfmt = logging.Formatter(timed_format, datefmt=datefmt)
+    
+    file = name + str(port)
+    handler = logging.handlers.TimedRotatingFileHandler(file, 'midnight')
+    handler.setFormatter(timedfmt)
+
+    self.log = logging.getLogger(name)
+    self.log.addHandler(handler)
 
   def TranslatePoolOrder(self, tobj):
-    d = {'ttype': [TempType.trans, TempType.notify],
+    d = {'ttype': tobj.template_type,
          'ptype': tobj.push_type,
          'title': u'包子拼车新订单信息', #tobj.title,
          'text':  u'有新的订单来了，赶快来抢吧', #tobj.text,
@@ -198,12 +180,12 @@ class PushCenter(object):
     return d
 
   def TranslateConfirmOrder(self, tobj):
-    d = {'ttype': [TempType.trans, TempType.notify],
+    d = {'ttype': tobj.template_type,
          'ptype': tobj.push_type,
-         'title': u'包子拼车推送信息', #tobj.title,
-         'text':  u'您的订单已有司机接单啦，赶紧查看吧', #tobj.text,
-         'content': tobj.content,
+         'title': tobj.title,
+         'text':  tobj.text,
          'url':   tobj.url,
+         'content': tobj.content,
          'target':tobj.target,
          'APPID': self.appId[tobj.app_type],
          'APPKEY':self.appKey[tobj.app_type]
@@ -211,65 +193,61 @@ class PushCenter(object):
     return d
 
   def TranslateCancelOrder(self, tobj):
-    d = {'ttype': [tobj.template_type],
+    d = {'ttype': tobj.template_type,
          'ptype': tobj.push_type,
-         'title': u'包子拼车推送信息', #tobj.title,
-         'text':  u'您的订单已被司机取消，系统将重新为您安排司机，请查看详情', #tobj.text,
-         'content': tobj.content,
+         'title': tobj.title,
+         'text':  tobj.text,
          'url':   tobj.url,
+         'content': tobj.content,
          'target':tobj.target,
          'APPID': self.appId[tobj.app_type],
          'APPKEY':self.appKey[tobj.app_type]
         }
     return d
-
+  
   def TranslateSystemNote(self, tobj):
     pass
 
 #######################################################
-def SetupLogger():
-  format = '[%(levelname)1.1s %(asctime)s %(module)s:%(lineno)d] %(message)s'
-  formater = logging.Formatter(format, datefmt='%Y-%m-%d %H:%M:%S')
-  
-  log_file = 'app_log.%d' % (options.pid)
-  handler = logging.handlers.RotatingFileHandler(log_file, maxBytes=10*1024*1024, backupCount=5)
-  handler.setFormatter(formater)
-  
-  logging.getLogger("tornado.application").addHandler(handler)
-
 def main():
-  SetupLogger()
   r = redis.StrictRedis(host=options.host, port=options.port)
-  pc = PushCenter()
+  pc = PushCenter(options.log, options.pid)
   
   while (1):
-    obj = r.brpop(options.queue, 5)
-    if obj is None:
-      time.sleep(5)
-      continue
-
     try:
+      obj = r.brpop(options.queue, 1)
+      if obj is None:
+        time.sleep(1)
+        continue
+
       msg = Message()
       msg = deserialize(msg, obj[1])
-      results = pc.push(msg)
+      ret = pc.push(msg)
+      app_log.info("push result %s", ret)
       
-      success = True
-      for ret in results:
-        app_log.info("push result %s", ret)
-        verb = ret['result'].lower()
-        if result != 'ok' and result != 'notarget':
-          app_log.info('push failed this time, will re-push %s', obj[1])
-          success = False
-          break
-      
-      if not success:
+      result = ret['result'].lower()
+      if result != 'ok' and result != 'notarget':
+        app_log.info('push failed this time, will re-push %s', obj[1])
         r.lpush(options.queue, obj[1])
     
     except Exception, e:
       app_log.error("push exception: %s", e)
 
- 
-
 if __name__ == '__main__':
-  tornado.options.parse_command_line()
-  main()
+  msg = Message()
+  msg.template_type = 1;
+  msg.push_type = 0;
+  msg.app_type = 0;
+  msg.title = "confirm_poolorder"
+  msg.text = "test_text"
+  msg.url = "http://www.12306.cn"
+  jdict = { 'driver_phone': '123',
+          'order_id': '456'}
+  msg.content = json.dumps(jdict)
+  msg.target = []
+  bincode = serialize(msg)
+
+  r = redis.StrictRedis(host=options.host, port=options.port)
+  r.lpush(options.queue, bincode)
+
+

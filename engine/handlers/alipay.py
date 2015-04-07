@@ -51,9 +51,6 @@ class AlipayNotifyHandler(BaseHandler):
   @tornado.web.asynchronous
   @tornado.gen.coroutine
   def post(self):
-    args = self.request.arguments
-    self.paylog.info(args)
-
     try:
       # check trade is successful
       trade_status = self.get_argument('trade_status')
@@ -61,6 +58,9 @@ class AlipayNotifyHandler(BaseHandler):
         app_log.info('trade status: %s', trade_status)
         self.write('failed')
         return
+    
+      args = self.request.arguments
+      self.paylog.info(args)
       # verify request is securety
       if not self.verify_sign(args):
         app_log.info('failed to check signature')

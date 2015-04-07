@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+import sys                                      
+reload(sys)
+sys.setdefaultencoding('utf-8')
 
 from igt_push import *
 from igetui.template import *
@@ -11,6 +14,8 @@ from igetui.template.igt_apn_template import *
 from igetui.igt_message import *
 from igetui.igt_target import *
 
+import tornado
+from tornado.log import app_log
 
 HOST = 'http://sdk.open.api.igexin.com/apiex.htm'
 

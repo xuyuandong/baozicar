@@ -3,7 +3,6 @@
 import logging
 from tornado.options import define, options
 
-define("reqlog", default="logs/req.log.", help="req logs")
 define("paylog", default="logs/pay.log.", help="pay logs")
 
 class LogUtil(object):
@@ -12,7 +11,6 @@ class LogUtil(object):
     timed_format = '%(asctime)s.%(msecs)d %(message)s'
     self.timedfmt = logging.Formatter(timed_format, datefmt=datefmt)
     
-    self.reqlog = self.__create_logger(options.reqlog, options.port)
     self.paylog = self.__create_logger(options.paylog, options.port)
 
   def __create_logger(self, name, port):

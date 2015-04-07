@@ -146,10 +146,10 @@ void Planner::ChangePriority(const std::string& path_id, const std::set<std::str
 
 void Planner::SendMessage(const PoolOrder* pool_order) {
   Message msg;
-  msg.template_type = 0;  // transmission template
+  msg.template_type = 1;  // notification template
   msg.push_type = 1;  // to list
   msg.app_type = 1; // to driver
-  msg.title = "pool_order";
+  msg.title = "poolorder";
   msg.text = "";
   msg.url = "";
   
