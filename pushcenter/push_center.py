@@ -104,6 +104,10 @@ AppType = enum(user=0, driver=1)
 
 class PushCenter(object):
   def __init__(self):
+    self.redis = redis.ConnectionPool(
+        host=options.host,
+        port=options.port
+        )
     self.pusher = {
         AppType.user: PushUtil(options.USER_APPID, options.USER_APPKEY, options.USER_MASTERSECRET),
         AppType.driver: PushUtil(options.SERV_APPID, options.SERV_APPKEY, options.SERV_MASTERSECRET)
@@ -133,7 +137,11 @@ class PushCenter(object):
         AppType.user: options.USER_APPKEY,
         AppType.driver: options.SERV_APPKEY
         }
-  
+ 
+  @property
+  def r(self):
+    return redis.Redis(connection_pool = self.redis)
+
   def push(self, tobj):
     dobj = self.__translate_message(tobj)
     app_log.info("push json\t%s", dobj)
@@ -239,11 +247,11 @@ def SetupLogger():
 
 def main():
   SetupLogger()
-  r = redis.StrictRedis(host=options.host, port=options.port)
+    
   pc = PushCenter()
   
   while (1):
-    obj = r.brpop(options.queue, 5)
+    obj = pc.r.brpop(options.queue, 5)
     if obj is None:
       time.sleep(5)
       continue
@@ -257,13 +265,13 @@ def main():
       for ret in results:
         app_log.info("push result %s", ret)
         verb = ret['result'].lower()
-        if result != 'ok' and result != 'notarget':
+        if verb != 'ok' and verb != 'notarget':
           app_log.info('push failed this time, will re-push %s', obj[1])
           success = False
           break
       
       if not success:
-        r.lpush(options.queue, obj[1])
+        pc.r.lpush(options.queue, obj[1])
     
     except Exception, e:
       app_log.error("push exception: %s", e)

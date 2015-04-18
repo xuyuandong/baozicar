@@ -245,6 +245,7 @@ void Carpooler::CheckOrSubsidyOrder(std::vector<Order*>* order_vec, std::vector<
         PoolOrder* po = new PoolOrder();
         po->cartype = CARPOOL;
         po->sstype = SUBSIDY;
+        po->number = orders[i]->number;
         po->order_list.push_back(*orders[i]);
         ss_po_vec.push_back(po);
       }

@@ -53,11 +53,20 @@ function _deploy()
   cp -r $src/logs $dst/
 }
 
+function _cplog()
+{
+  date=`date +"%Y%m%d"`
+  log=$WK_DIR/bin/nohup.out
+  bak=$WK_DIR/logs/$date.log
+  cp $log $bak
+  echo >$log
+}
+
 ##
 # main
 
 case $1 in 
-  deploy|start|stop|restart)
+  deploy|start|stop|restart|cplog)
   _${1}
   ;;
   *)

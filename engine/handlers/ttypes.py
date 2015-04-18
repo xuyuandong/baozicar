@@ -183,6 +183,7 @@ class Order:
    - cartype
    - price
    - time
+   - start_time
   """
 
   thrift_spec = (
@@ -194,9 +195,10 @@ class Order:
     (5, TType.I32, 'cartype', None, None, ), # 5
     (6, TType.DOUBLE, 'price', None, None, ), # 6
     (7, TType.I64, 'time', None, None, ), # 7
+    (8, TType.STRING, 'start_time', None, None, ), # 8
   )
 
-  def __init__(self, id=None, path=None, phone=None, number=None, cartype=None, price=None, time=None,):
+  def __init__(self, id=None, path=None, phone=None, number=None, cartype=None, price=None, time=None, start_time=None,):
     self.id = id
     self.path = path
     self.phone = phone
@@ -204,6 +206,7 @@ class Order:
     self.cartype = cartype
     self.price = price
     self.time = time
+    self.start_time = start_time
 
   def read(self, iprot):
     if iprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None and fastbinary is not None:
@@ -250,6 +253,11 @@ class Order:
           self.time = iprot.readI64()
         else:
           iprot.skip(ftype)
+      elif fid == 8:
+        if ftype == TType.STRING:
+          self.start_time = iprot.readString()
+        else:
+          iprot.skip(ftype)
       else:
         iprot.skip(ftype)
       iprot.readFieldEnd()
@@ -288,6 +296,10 @@ class Order:
       oprot.writeFieldBegin('time', TType.I64, 7)
       oprot.writeI64(self.time)
       oprot.writeFieldEnd()
+    if self.start_time is not None:
+      oprot.writeFieldBegin('start_time', TType.STRING, 8)
+      oprot.writeString(self.start_time)
+      oprot.writeFieldEnd()
     oprot.writeFieldStop()
     oprot.writeStructEnd()
 
@@ -304,6 +316,7 @@ class Order:
     value = (value * 31) ^ hash(self.cartype)
     value = (value * 31) ^ hash(self.price)
     value = (value * 31) ^ hash(self.time)
+    value = (value * 31) ^ hash(self.start_time)
     return value
 
   def __repr__(self):
@@ -400,17 +413,20 @@ class HistoryDriver:
   Attributes:
    - drivers
    - reduced
+   - update_time
   """
 
   thrift_spec = (
     None, # 0
     (1, TType.SET, 'drivers', (TType.STRING,None), None, ), # 1
     (2, TType.BOOL, 'reduced', None, False, ), # 2
+    (3, TType.I64, 'update_time', None, None, ), # 3
   )
 
-  def __init__(self, drivers=None, reduced=thrift_spec[2][4],):
+  def __init__(self, drivers=None, reduced=thrift_spec[2][4], update_time=None,):
     self.drivers = drivers
     self.reduced = reduced
+    self.update_time = update_time
 
   def read(self, iprot):
     if iprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None and fastbinary is not None:
@@ -436,6 +452,11 @@ class HistoryDriver:
           self.reduced = iprot.readBool()
         else:
           iprot.skip(ftype)
+      elif fid == 3:
+        if ftype == TType.I64:
+          self.update_time = iprot.readI64()
+        else:
+          iprot.skip(ftype)
       else:
         iprot.skip(ftype)
       iprot.readFieldEnd()
@@ -457,6 +478,10 @@ class HistoryDriver:
       oprot.writeFieldBegin('reduced', TType.BOOL, 2)
       oprot.writeBool(self.reduced)
       oprot.writeFieldEnd()
+    if self.update_time is not None:
+      oprot.writeFieldBegin('update_time', TType.I64, 3)
+      oprot.writeI64(self.update_time)
+      oprot.writeFieldEnd()
     oprot.writeFieldStop()
     oprot.writeStructEnd()
 
@@ -468,6 +493,7 @@ class HistoryDriver:
     value = 17
     value = (value * 31) ^ hash(self.drivers)
     value = (value * 31) ^ hash(self.reduced)
+    value = (value * 31) ^ hash(self.update_time)
     return value
 
   def __repr__(self):

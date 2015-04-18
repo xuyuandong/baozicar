@@ -276,8 +276,12 @@ void Order::__set_time(const int64_t val) {
   this->time = val;
 }
 
-const char* Order::ascii_fingerprint = "0E95B2698AD9772974A275159CF76313";
-const uint8_t Order::binary_fingerprint[16] = {0x0E,0x95,0xB2,0x69,0x8A,0xD9,0x77,0x29,0x74,0xA2,0x75,0x15,0x9C,0xF7,0x63,0x13};
+void Order::__set_start_time(const std::string& val) {
+  this->start_time = val;
+}
+
+const char* Order::ascii_fingerprint = "FAC42F7FCAEAF5274F6894C740E639F4";
+const uint8_t Order::binary_fingerprint[16] = {0xFA,0xC4,0x2F,0x7F,0xCA,0xEA,0xF5,0x27,0x4F,0x68,0x94,0xC7,0x40,0xE6,0x39,0xF4};
 
 uint32_t Order::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -355,6 +359,14 @@ uint32_t Order::read(::apache::thrift::protocol::TProtocol* iprot) {
           xfer += iprot->skip(ftype);
         }
         break;
+      case 8:
+        if (ftype == ::apache::thrift::protocol::T_STRING) {
+          xfer += iprot->readString(this->start_time);
+          this->__isset.start_time = true;
+        } else {
+          xfer += iprot->skip(ftype);
+        }
+        break;
       default:
         xfer += iprot->skip(ftype);
         break;
@@ -400,6 +412,10 @@ uint32_t Order::write(::apache::thrift::protocol::TProtocol* oprot) const {
   xfer += oprot->writeI64(this->time);
   xfer += oprot->writeFieldEnd();
 
+  xfer += oprot->writeFieldBegin("start_time", ::apache::thrift::protocol::T_STRING, 8);
+  xfer += oprot->writeString(this->start_time);
+  xfer += oprot->writeFieldEnd();
+
   xfer += oprot->writeFieldStop();
   xfer += oprot->writeStructEnd();
   oprot->decrementRecursionDepth();
@@ -415,6 +431,7 @@ void swap(Order &a, Order &b) {
   swap(a.cartype, b.cartype);
   swap(a.price, b.price);
   swap(a.time, b.time);
+  swap(a.start_time, b.start_time);
   swap(a.__isset, b.__isset);
 }
 
@@ -426,6 +443,7 @@ Order::Order(const Order& other2) {
   cartype = other2.cartype;
   price = other2.price;
   time = other2.time;
+  start_time = other2.start_time;
   __isset = other2.__isset;
 }
 Order& Order::operator=(const Order& other3) {
@@ -436,6 +454,7 @@ Order& Order::operator=(const Order& other3) {
   cartype = other3.cartype;
   price = other3.price;
   time = other3.time;
+  start_time = other3.start_time;
   __isset = other3.__isset;
   return *this;
 }
@@ -449,6 +468,7 @@ std::ostream& operator<<(std::ostream& out, const Order& obj) {
   out << ", " << "cartype=" << to_string(obj.cartype);
   out << ", " << "price=" << to_string(obj.price);
   out << ", " << "time=" << to_string(obj.time);
+  out << ", " << "start_time=" << to_string(obj.start_time);
   out << ")";
   return out;
 }
@@ -751,8 +771,8 @@ void PoolOrder::__set_number(const int32_t val) {
   this->number = val;
 }
 
-const char* PoolOrder::ascii_fingerprint = "F7EEE70CFF3D3DDD7AC01476ABEC0F05";
-const uint8_t PoolOrder::binary_fingerprint[16] = {0xF7,0xEE,0xE7,0x0C,0xFF,0x3D,0x3D,0xDD,0x7A,0xC0,0x14,0x76,0xAB,0xEC,0x0F,0x05};
+const char* PoolOrder::ascii_fingerprint = "865675DED15AC0EBAAE0A6CADEDF024C";
+const uint8_t PoolOrder::binary_fingerprint[16] = {0x86,0x56,0x75,0xDE,0xD1,0x5A,0xC0,0xEB,0xAA,0xE0,0xA6,0xCA,0xDE,0xDF,0x02,0x4C};
 
 uint32_t PoolOrder::read(::apache::thrift::protocol::TProtocol* iprot) {
 

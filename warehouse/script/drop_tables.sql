@@ -4,7 +4,4 @@
 
 use cardb;
 
-drop table t_order;
-drop table t_coupon;
-drop table t_payment;
-drop table t_poolorder;
+drop table t_sms;

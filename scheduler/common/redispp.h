@@ -57,8 +57,9 @@ class ReplyObj {
 /* Not Thread-Safe Client */
 class Redispp {
   public:
-    Redispp(const char* host, int port) {
+    Redispp(const char* host, int port): host_(host), port_(port) {
       redis_ = redisConnect(host, port);
+      CHECK(!redis_->err) << "failed to connect redis.";   
     }
     ~Redispp() {
       redisFree(redis_);
@@ -68,13 +69,32 @@ class Redispp {
       void *reply = NULL;
       va_list ap;
       va_start(ap,format);
+      
+      // send command
       reply = redisvCommand(redis_, format, ap);
+      // try reconnect
+      int retry_times = 60;
+      while (reply == NULL && 0 != retry_times--) {
+        LOG(INFO) << "reconnect redis " << retry_times;
+        struct timeval timeout = {0, 100000};
+        redis_ = redisConnectWithTimeout(host_.c_str(), port_, timeout);
+        if (redis_->err) {
+          redisFree(redis_);
+          sleep(1);
+        } else {
+          reply = redisvCommand(redis_, format, ap);
+        }
+      }
+      CHECK(reply != NULL) << "failed to reconnect redis, timeout ...";
+      
       va_end(ap);
       return (redisReply*)reply;
     }
 
   private:
-    redisContext* redis_; 
+    redisContext* redis_;
+    std::string host_;
+    int port_;
 };
 
 class RedisLock {

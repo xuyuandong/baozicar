@@ -44,8 +44,12 @@ class UserLoginHandler(BaseHandler):
     authcode = self.get_argument("authcode")
     dev_id = self.get_argument("dev_id")
     push_id = self.get_argument('push_id')
+
     name = self.get_argument('name')
-    #gender = self.get_argument('gender')
+    gender = self.get_argument('gender')
+    
+    name = name + gender
+    app_log.info('phone=%s, name=%s', phone, name)
 
     # check authcode
     if authcode != self.r.get(options.authcode_rpf + phone):
@@ -268,10 +272,20 @@ class SubmitOrderHandler(BaseHandler):
       extra_msg = self.get_argument('extra_msg')
       start_time = self.get_argument('start_time')
 
+    app_log.info('submit phone=%s, name=%s', phone, name)
+
+    # check conflict
+    table = 'cardb.t_order'
+    sql = "select order_type, status, dt from %s where \
+        phone='%s' and status<%s"%(table, phone, OrderStatus.toeval)
+    anylist = self.db.query(sql)
+    if anylist is not None and len(anylist) > 0:
+      self.write({'status_code':201, 
+        'error_msg':u'您有未完成的订单，请待完成后再预约新的订单'})
+      return
+    
     # insert into mysql db
     order_id = base.uuid(phone)
-
-    table = 'cardb.t_order'
     sql = "insert into %s (id, order_type, status, phone, name, start_time,\
            from_city, from_place, to_city, to_place, num, msg,\
            pay_id, price, fact_price, coupon_id, coupon_price, \
@@ -283,10 +297,6 @@ class SubmitOrderHandler(BaseHandler):
                pay_id, price, fact_price, coupon_id, coupon_price,
                from_lat, from_lng, to_lat, to_lng)
     self.db.execute(sql)
-
-    # order unique id generator
-    #obj = self.db.get("select last_insert_id() as id")
-    #order_id = obj.id
 
     # return result
     msg = {'status_code':200,

@@ -36,7 +36,12 @@ class DBUtil:
     return self.r
 
 path = {
-    'price': 200,
+    'pc_price': 100,
+    'bc_price': 200,
+    'from_pc_step': 2,
+    'to_pc_step': 1.5,
+    'from_bc_step': 2.5,
+    'to_bc_step': 2,
     'from_city': 'shenzhen',
     'to_city': 'guangzhou',
     'from_origin': 'FUCK',
@@ -47,8 +52,6 @@ path = {
     'to_lng': 117.23353379797,
     'from_discount': 3,
     'to_discount': 2,
-    'from_step': 2,
-    'to_step': 1.5,
     'from_scale': 1.2,
     'to_scale': 1.1,
     'driver_num': 10,
@@ -86,13 +89,20 @@ db.r.hmset(rkey, path)
 
 # insert path
 sql = "insert into cardb.t_path \
-    (price, from_city, to_city, from_origin, to_origin, \
+    (pc_price, bc_price, from_pc_step, to_pc_step, \
+    from_bc_step, to_bc_step, \
+    from_city, to_city, from_origin, to_origin, \
     from_lat, from_lng, to_lat, to_lng, from_discount, to_discount, \
     from_step, to_step, from_scale, to_scale, driver_num) \
-    values (%s, '%s', '%s', '%s', '%s', \
+    values (%s, %s, %s, %s,\
+    %s, %s, \
+    '%s', '%s', '%s', '%s', \
     %s, %s, %s, %s, %s, %s, \
-    %s, %s, %s, %s, %s)"\
-    %(path['price'], path['from_city'], path['to_city'], path['from_origin'], path['to_origin'],
-      path['from_lat'], path['from_lng'], path['to_lat'], path['to_lng'], path['from_discount'], path['to_discount'],
-      path['from_step'], path['to_step'], path['from_scale'], path['to_scale'], path['driver_num'])
+    %s, %s, %s)"\
+    %(path['pc_price'], path['bc_price'], path['from_pc_step'], path['to_pc_step'],
+    path['from_bc_step'], path['to_bc_step'],
+    path['from_city'], path['to_city'], path['from_origin'], path['to_origin'],
+    path['from_lat'], path['from_lng'], path['to_lat'], path['to_lng'], 
+    path['from_discount'], path['to_discount'],
+    path['from_scale'], path['to_scale'], path['driver_num'])
 db.execute(sql)

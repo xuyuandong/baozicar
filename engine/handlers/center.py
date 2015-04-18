@@ -43,7 +43,7 @@ class GetAuthCodeHandler(BaseHandler):
     phone = self.get_argument("phone")
     authcode = str(random.randint(1000, 9999))
 
-    result = ''
+    result = '-1'
     try:
       self.r.set(options.authcode_rpf + phone, authcode, ex = 300)
       response = yield self.sendsms(phone, authcode)
@@ -60,6 +60,11 @@ class GetAuthCodeHandler(BaseHandler):
       #self.write({'status_code':201, 'error_msg':'failed to send sms'})
       self.write({'status_code':201, 'error_msg':u'发送验证码失败'})
 
+    # record sms into mysql
+    table = 'cardb.t_sms'
+    sql = "insert into %s (phone, content, status) \
+        values('%s', '%s', '%s');"%(table, phone, authcode, result)
+    self.db.execute(sql)
 
   def sendsms(self, phone, authcode):
     #content='尊敬的用户，您好！感谢您选择包子拼车，包子拼车验证码%s已发送到您手机上，美好城市绿色出行，包子拼车为您导航。'%(authcode)
@@ -116,6 +121,7 @@ class QueryPriceHandler(BaseHandler):
     
     person_num = int(self.get_argument('person_num'))
     order_type = int(self.get_argument('order_type'))
+    app_log.info('order_type=%s person_num=%s', order_type, person_num)
 
     # get path infomation from redis
     path = options.path_rpf + '-'.join([from_city, to_city])
@@ -281,3 +287,28 @@ class FeedbackHandler(BaseHandler):
     self.db.execute(sql)
 
     self.write({'status_code':200, 'error_msg':''})
+
+
+# /get_newest_version
+class GetNewestVersionHandler(BaseHandler):
+  #@base.authenticated
+  def post(self):
+    try:
+      app = self.get_argument('app_id')
+      platform = self.get_argument('platform')
+    except Exception, e:
+      app = 0
+      platform = 0
+
+    table = 'cardb.t_version'
+    sql = "select version, url from %s \
+        where app=%s and platform=%s limit 1"%(table, app, platform);
+    try:
+      obj = self.db.get(sql)
+    except Exception, e:
+      self.write({'status_code':201, 'error_msg':''})
+      return
+
+    msg = {'status_code':200, 'error_msg':'',
+        'version':obj.version, 'url':obj.url}
+    self.write(msg)

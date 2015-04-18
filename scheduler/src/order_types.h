@@ -117,7 +117,7 @@ class Path {
 void swap(Path &a, Path &b);
 
 typedef struct _Order__isset {
-  _Order__isset() : id(false), path(false), phone(false), number(false), cartype(false), price(false), time(false) {}
+  _Order__isset() : id(false), path(false), phone(false), number(false), cartype(false), price(false), time(false), start_time(false) {}
   bool id :1;
   bool path :1;
   bool phone :1;
@@ -125,17 +125,18 @@ typedef struct _Order__isset {
   bool cartype :1;
   bool price :1;
   bool time :1;
+  bool start_time :1;
 } _Order__isset;
 
 class Order {
  public:
 
-  static const char* ascii_fingerprint; // = "0E95B2698AD9772974A275159CF76313";
-  static const uint8_t binary_fingerprint[16]; // = {0x0E,0x95,0xB2,0x69,0x8A,0xD9,0x77,0x29,0x74,0xA2,0x75,0x15,0x9C,0xF7,0x63,0x13};
+  static const char* ascii_fingerprint; // = "FAC42F7FCAEAF5274F6894C740E639F4";
+  static const uint8_t binary_fingerprint[16]; // = {0xFA,0xC4,0x2F,0x7F,0xCA,0xEA,0xF5,0x27,0x4F,0x68,0x94,0xC7,0x40,0xE6,0x39,0xF4};
 
   Order(const Order&);
   Order& operator=(const Order&);
-  Order() : id(0), phone(), number(0), cartype(0), price(0), time(0) {
+  Order() : id(0), phone(), number(0), cartype(0), price(0), time(0), start_time() {
   }
 
   virtual ~Order() throw();
@@ -146,6 +147,7 @@ class Order {
   int32_t cartype;
   double price;
   int64_t time;
+  std::string start_time;
 
   _Order__isset __isset;
 
@@ -163,6 +165,8 @@ class Order {
 
   void __set_time(const int64_t val);
 
+  void __set_start_time(const std::string& val);
+
   bool operator == (const Order & rhs) const
   {
     if (!(id == rhs.id))
@@ -178,6 +182,8 @@ class Order {
     if (!(price == rhs.price))
       return false;
     if (!(time == rhs.time))
+      return false;
+    if (!(start_time == rhs.start_time))
       return false;
     return true;
   }
@@ -314,8 +320,8 @@ typedef struct _PoolOrder__isset {
 class PoolOrder {
  public:
 
-  static const char* ascii_fingerprint; // = "F7EEE70CFF3D3DDD7AC01476ABEC0F05";
-  static const uint8_t binary_fingerprint[16]; // = {0xF7,0xEE,0xE7,0x0C,0xFF,0x3D,0x3D,0xDD,0x7A,0xC0,0x14,0x76,0xAB,0xEC,0x0F,0x05};
+  static const char* ascii_fingerprint; // = "865675DED15AC0EBAAE0A6CADEDF024C";
+  static const uint8_t binary_fingerprint[16]; // = {0x86,0x56,0x75,0xDE,0xD1,0x5A,0xC0,0xEB,0xAA,0xE0,0xA6,0xCA,0xDE,0xDF,0x02,0x4C};
 
   PoolOrder(const PoolOrder&);
   PoolOrder& operator=(const PoolOrder&);

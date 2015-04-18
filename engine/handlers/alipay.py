@@ -148,13 +148,13 @@ class AlipayNotifyHandler(BaseHandler):
     # select info to send
     sql = "select order_type, status, phone, name, start_time,\
            from_city, from_place, to_city, to_place, num, \
-           price, coupon_id, coupon_price, \
+           start_time, price, coupon_id, coupon_price, \
            from_lat, from_lng, to_lat, to_lng \
            from %s where id=%s"%(table, order_id)
     obj = self.db.get(sql)
 
     # mark coupon is used
-    if obj.coupon_price > 0:
+    if obj is not None and obj.coupon_price > 0:
       table = 'cardb.t_coupon'
       sql = "update %s set status=%s where id=%s"%(table, CouponStatus.used, obj.coupon_id)
       self.db.execute(sql)
@@ -179,6 +179,7 @@ class AlipayNotifyHandler(BaseHandler):
     order.cartype = int(obj.order_type)
     order.price = int(obj.price)
     order.time = int(time.time())
+    order.start_time = obj.start_time
 
     thrift_obj = serialize(order)
     

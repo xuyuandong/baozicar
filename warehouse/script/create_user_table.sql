@@ -75,3 +75,24 @@ CREATE TABLE IF NOT EXISTS t_coupon (
   INDEX (phone, code)
 ) ENGINE=InnoDB;
 
+CREATE TABLE IF NOT EXISTS t_refund (
+  id     INT(10) NOT NULL AUTO_INCREMENT,
+  batch_no     VARCHAR(32) NOT NULL,
+  trade_no     VARCHAR(32) NOT NULL,
+  order_id     BIGINT(20) UNSIGNED NOT NULL,
+  price        FLOAT(8,3) NOT NULL,
+  status       INT(2)  NOT NULL COMMENT 'alipay->0',
+  buyer        VARCHAR(32)  NOT NULL,
+  seller       VARCHAR(32)  NOT NULL,
+  buyer_id     VARCHAR(32)  NOT NULL,
+  seller_id    VARCHAR(32)  NOT NULL,
+  detail_data  VARCHAR(256) NOT NULL,
+  success_num  INT(10)      NOT NULL,
+  result       VARCHAR(1024) NOT NULL,
+  extra_info   VARCHAR(256) NOT NULL,
+  last_modify TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  dt          TIMESTAMP NOT NULL DEFAULT 0,
+  PRIMARY KEY (id),
+  INDEX (batch_no, trade_no, order_id)
+) ENGINE=InnoDB;
+

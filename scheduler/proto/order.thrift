@@ -20,7 +20,8 @@ struct Order {
   4: i32 number,
   5: i32 cartype,
   6: double price,
-  7: i64 time
+  7: i64 time,
+  8: string start_time
 }
 
 struct Driver {
