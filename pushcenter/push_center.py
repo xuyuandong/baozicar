@@ -26,10 +26,10 @@ from thrift.TSerialization import *
 from genpy.scheduler.ttypes import *
 
 
-define("host", default = "localhost", help = "")
+define("host", default = "redis1.ali", help = "")
 define("port", default = 6379, help = "", type = int)
 define("queue", default = "l_message", help = "")
-
+define("retry_times", default=2, help="", type=int)
 define("pid", default = 0, help = "process id", type = int)
 
 define("USER_APPID", default = "qlZIF87hye8ZzyifZIEMn3", help = "")
@@ -62,7 +62,7 @@ def GetNotificationTemplate(dobj):
     template = NotificationTemplate()
     template.appId = dobj['APPID']
     template.appKey = dobj['APPKEY']
-    template.transmissionType = 2
+    template.transmissionType = 1
     template.title = dobj['title']
     template.text = dobj['text']
     template.transmissionContent = '' #dobj['content']
@@ -164,7 +164,17 @@ class PushCenter(object):
     for temp in dobj['ttype']:
       app_log.info("push template %s", temp)
       template = self.templateAction.get(temp)(dobj)
-      ret = self.pushAction.get(ptype)(pusher, template, target)
+      
+      retry = options.retry_times
+      while retry > 0:
+        ret = self.pushAction.get(ptype)(pusher, template, target)
+        app_log.info('try=%s ret=%s', retry, ret)
+        verb = ret['result'].lower()
+        if verb != 'ok' and verb != 'notarget':
+          retry = retry - 1
+        else:
+          break
+
       result.append(ret)
 
     return result
@@ -263,15 +273,13 @@ def main():
       
       success = True
       for ret in results:
-        app_log.info("push result %s", ret)
         verb = ret['result'].lower()
         if verb != 'ok' and verb != 'notarget':
-          app_log.info('push failed this time, will re-push %s', obj[1])
           success = False
           break
       
-      if not success:
-        pc.r.lpush(options.queue, obj[1])
+      #if not success:
+      #  pc.r.lpush(options.queue, obj[1])
     
     except Exception, e:
       app_log.error("push exception: %s", e)

@@ -14,6 +14,7 @@ from tornado.log import app_log
 from futures import ThreadPoolExecutor
 from thrift.TSerialization import *
 
+import md5
 import Crypto
 import base64
 import binascii
@@ -22,7 +23,8 @@ from Crypto import Signature
 from Crypto.Hash import SHA
 from Crypto.PublicKey import RSA
 from Crypto.Signature import PKCS1_v1_5
-from urllib import urlopen
+
+import xml.etree.ElementTree as ET
 
 ################# coding comment ####################################
 # status_code: 200 OK 201 Failed
@@ -38,6 +40,10 @@ from ttypes import Path, Order, Message
 define("alipay_partner", default='2088811966740952', help="alipay partner id")
 define("alipay_url", default="https://mapi.alipay.com/gateway.do?service=notify_verify&", help="verify url")
 define("alipay_public_key", default='/home/deploy/conf/alipay_public_key_pkcs8.pem', help="")
+
+define("wxpay_partner", default='1237030902', help="wxpay partner id")
+define("wxpay_md5_key", default='c8gv99modak1qv8r02j97c4u67dcgoma', help="wxpay md5 key")
+define("wxpay_url", default='https://gw.tenpay.com/gateway/verifynotifyid.xml?', help="verify url")
 
 def base64ToString(s):
   try:
@@ -188,3 +194,83 @@ class AlipayNotifyHandler(BaseHandler):
     pipe.lpush(options.order_rq, order_id)
     pipe.execute()
 
+
+
+# /wxpay_notify
+class WxpayNotifyHandler(BaseHandler):
+  @tornado.web.asynchronous
+  @tornado.gen.coroutine
+  def post(self):
+    args = self.request.arguments
+    app_log.info(args)
+    app_log.info(self.request)
+    app_log.info(self.request.connection)
+    app_log.info(self.request.path)
+    app_log.info(self.request.headers)
+    app_log.info(self.request.body)
+
+    request_url = self.get_request_url()
+    app_log.info('request_url: ' + request_url)
+
+    try:
+      xml = yield self.verify(args)
+      app_log.info(xml)
+    except Exception, e:
+      app_log.error(e)
+      self.write('failed')
+      return
+
+    data = self.parse(xml)
+    
+    # retcode       0
+    # trade_state   0
+    # trade_mode    1
+    # isTenpaySign  true
+    
+    # transaction_id
+    # out_trade_no
+    # total_fee
+    # time_end
+
+    # please don't redo this part!!!
+    self.process(0, 0, 0)
+
+    self.write('success')
+
+
+  def get_sign(self, args):
+    params = []
+    for key in sorted(args):
+      if key == 'sign' or len(args[key]) == 0:
+        continue
+      params.append( '='.join([key, args[key][0]]) )
+
+    params.append('key=' + options.wxpay_md5_key)
+    pre_sign_str = '&'.join(params)
+    sign = md5.md5(pre_sign_str + options.http_request_key).hexdigest()
+    return sign.upper()
+
+  def get_request_url(self):
+    args = {'partner': [options.wxpay_partner],
+        'notify_id': [self.get_argument('notify_id')]
+        }
+    args['sign'] = [ self.get_sign(args) ]
+
+    pairs = []
+    for key in sorted(args):
+      pairs.append( '='.join(key, args[key][0]) )
+    
+    request_pairs = '&'.join(pairs) 
+    return options.wxpay_url + request_pairs
+
+  def verify(self, request_url):
+    client = AsyncHTTPClient()
+    return client.fetch(request_url)
+
+  def parse(self, xml_str):
+    root = ET.fromstring(xml_str)
+    for child in root:
+      print child.tag, child.text
+
+  def process(self, order_id, pay_id, fact_price):
+    pass

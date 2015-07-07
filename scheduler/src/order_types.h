@@ -306,7 +306,7 @@ class HistoryDriver {
 void swap(HistoryDriver &a, HistoryDriver &b);
 
 typedef struct _PoolOrder__isset {
-  _PoolOrder__isset() : id(false), cartype(false), order_list(false), pushtime(false), drivers(false), subsidy(true), sstype(true), number(false) {}
+  _PoolOrder__isset() : id(false), cartype(false), order_list(false), pushtime(false), drivers(false), subsidy(true), sstype(true), number(false), from_station(false), to_station(false) {}
   bool id :1;
   bool cartype :1;
   bool order_list :1;
@@ -315,17 +315,19 @@ typedef struct _PoolOrder__isset {
   bool subsidy :1;
   bool sstype :1;
   bool number :1;
+  bool from_station :1;
+  bool to_station :1;
 } _PoolOrder__isset;
 
 class PoolOrder {
  public:
 
-  static const char* ascii_fingerprint; // = "865675DED15AC0EBAAE0A6CADEDF024C";
-  static const uint8_t binary_fingerprint[16]; // = {0x86,0x56,0x75,0xDE,0xD1,0x5A,0xC0,0xEB,0xAA,0xE0,0xA6,0xCA,0xDE,0xDF,0x02,0x4C};
+  static const char* ascii_fingerprint; // = "6372D08A41856244DD0B4B3699C0D0FE";
+  static const uint8_t binary_fingerprint[16]; // = {0x63,0x72,0xD0,0x8A,0x41,0x85,0x62,0x44,0xDD,0x0B,0x4B,0x36,0x99,0xC0,0xD0,0xFE};
 
   PoolOrder(const PoolOrder&);
   PoolOrder& operator=(const PoolOrder&);
-  PoolOrder() : id(), cartype(0), pushtime(0), subsidy(0), sstype(0), number(0) {
+  PoolOrder() : id(), cartype(0), pushtime(0), subsidy(0), sstype(0), number(0), from_station(), to_station() {
   }
 
   virtual ~PoolOrder() throw();
@@ -337,6 +339,8 @@ class PoolOrder {
   double subsidy;
   int32_t sstype;
   int32_t number;
+  std::string from_station;
+  std::string to_station;
 
   _PoolOrder__isset __isset;
 
@@ -356,6 +360,10 @@ class PoolOrder {
 
   void __set_number(const int32_t val);
 
+  void __set_from_station(const std::string& val);
+
+  void __set_to_station(const std::string& val);
+
   bool operator == (const PoolOrder & rhs) const
   {
     if (!(id == rhs.id))
@@ -373,6 +381,14 @@ class PoolOrder {
     if (!(sstype == rhs.sstype))
       return false;
     if (!(number == rhs.number))
+      return false;
+    if (__isset.from_station != rhs.__isset.from_station)
+      return false;
+    else if (__isset.from_station && !(from_station == rhs.from_station))
+      return false;
+    if (__isset.to_station != rhs.__isset.to_station)
+      return false;
+    else if (__isset.to_station && !(to_station == rhs.to_station))
       return false;
     return true;
   }

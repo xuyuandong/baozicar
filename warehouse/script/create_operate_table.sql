@@ -1,0 +1,21 @@
+use cardb;
+
+CREATE TABLE IF NOT EXISTS t_drecuser (
+  id     INT(10) NOT NULL AUTO_INCREMENT,
+  driver_phone   VARCHAR(16) NOT NULL,
+  user_phone     VARCHAR(16) NOT NULL,
+  status         INT(2) NOT NULL,
+  last_modify TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  dt          TIMESTAMP NOT NULL DEFAULT 0,
+  PRIMARY KEY (id, driver_phone, user_phone)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS t_wxshare_app (
+  id     INT(10) NOT NULL AUTO_INCREMENT,
+  phone  VARCHAR(16) NOT NULL,
+  code     BIGINT(20) UNSIGNED NOT NULL,
+  dt     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id, phone)
+) ENGINE=InnoDB;
+
+

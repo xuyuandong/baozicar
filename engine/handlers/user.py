@@ -47,7 +47,6 @@ class UserLoginHandler(BaseHandler):
 
     name = self.get_argument('name')
     gender = self.get_argument('gender')
-    
     name = name + gender
     app_log.info('phone=%s, name=%s', phone, name)
 
@@ -59,7 +58,12 @@ class UserLoginHandler(BaseHandler):
 
     # unique user profile mapping: phone -> (device, push_id)
     rkey = options.login_rpf + phone
-    if dev_id != self.r.hget(rkey, 'device') or str(LoginType.user) != self.r.hget(rkey, 't'):
+    rval = self.r.get(rkey)
+    
+    if rval is None \
+      or dev_id != self.r.hget(rkey, 'device') \
+      or push_id != self.r.hget(rkey, 'push') \
+      or str(LoginType.user) != self.r.hget(rkey, 't'):
       # async bind push_id
       if not ( yield self.async_bind(phone, push_id) ):
         #self.write({"status_code":201, "error_msg":"bind push_id error"})
@@ -69,13 +73,9 @@ class UserLoginHandler(BaseHandler):
       # device <-> push_id is one one mapping 
       self.r.hmset(rkey, {'device':dev_id, 'push':push_id, 'name':name, 't':LoginType.user})
 
-
-    # insert into mysql
-    table = 'cardb.t_user'
-    sql = "insert into %s (phone, dev, name, image)\
-        values ('%s', '%s', '%s', '') \
-        on duplicate key update dev='%s'"%(table, phone, dev_id, name, dev_id)
-    self.db.execute(sql)
+    # process logic for first time login
+    if rval is None:
+      self.first_login_reward(phone, dev_id, name)
 
     # return token
     token = self.set_secure_cookie(options.token_key, phone)
@@ -86,6 +86,37 @@ class UserLoginHandler(BaseHandler):
     ret1 = self.push.user.unbindAliasAll(phone)
     ret2 = self.push.user.bindAlias(phone, push_id)
     return (ret2['result'].upper() == 'OK')
+
+  def first_login_reward(self, phone, dev_id, name):
+    table = 'cardb.t_user'
+    sql = "select id from %s where phone='%s' limit 1"%(table, phone)
+    obj = self.db.get(sql)
+
+    # not first time login
+    if obj is not None:
+      return
+
+    # insert into mysql
+    sql = "insert into %s (phone, dev, name, image)\
+        values ('%s', '%s', '%s', '')"%(table, phone, dev_id, name)
+    self.db.execute(sql)
+
+    # reward a coupon
+    deadline = datetime.datetime.now() + datetime.timedelta(days = 30)
+    coupon = {'ctype': -1,
+        'price': 15,
+        'within': 0,
+        'deadline': deadline.strftime('%Y-%m-%d'),
+        'note': u'首次乘车奖励'}
+    coupon_id = base.uuid(phone)
+
+    table = 'cardb.t_coupon'
+    sql = "insert into %s (id, ctype, status, price, within, deadline, note, phone, code, dt) \
+        values(%s, %s, %s, %s, %s, '%s', '%s', '%s', %s, null)" \
+        %(table, coupon_id, coupon['ctype'], CouponStatus.normal, \
+        coupon['price'], coupon['within'], coupon['deadline'], coupon['note'], phone, 0)
+    self.db.execute(sql)
+
 
 
 # /save_profile
@@ -179,6 +210,12 @@ class ExchangeCouponHandler(BaseHandler):
       self.write({'status_code':201, 'error_msg':u'无效的优惠券兑换码'})
       return
 
+    # check deadline or duration
+    if len(coupon['deadline']) == 0:
+      duration = int(coupon['duration'])
+      deadline = datetime.datetime.now() + datetime.timedelta(days = duration)
+      coupon['deadline'] = deadline.strftime('%Y-%m-%d')
+
     # check already exchange
     table = 'cardb.t_coupon'
     sql = "select id from %s where phone=%s and code=%s limit 1;"%(table, phone, code)
@@ -214,10 +251,7 @@ class ExchangeCouponHandler(BaseHandler):
         coupon['price'], coupon['within'], coupon['deadline'], coupon['note'], phone, code)
     self.db.execute(sql)
 
-    # coupon unique id generator
-    #obj = self.db.get("select last_insert_id() as id")
-    #coupon_id = obj.id
-
+    # result
     msg = {
         'status_code' : 200,
         'error_msg' : '',
@@ -272,8 +306,6 @@ class SubmitOrderHandler(BaseHandler):
       extra_msg = self.get_argument('extra_msg')
       start_time = self.get_argument('start_time')
 
-    app_log.info('submit phone=%s, name=%s', phone, name)
-
     # check conflict
     table = 'cardb.t_order'
     sql = "select order_type, status, dt from %s where \
@@ -281,7 +313,7 @@ class SubmitOrderHandler(BaseHandler):
     anylist = self.db.query(sql)
     if anylist is not None and len(anylist) > 0:
       self.write({'status_code':201, 
-        'error_msg':u'您有未完成的订单，请待完成后再预约新的订单'})
+        'error_msg':u'亲，您有未完成的订单哦，请待完成后再预约新的订单~'})
       return
     
     # insert into mysql db
@@ -410,9 +442,9 @@ class GetOrderListHandler(BaseHandler):
     # get type filter
     oltype = self.get_argument("order_list_type")
     typefilter = {
-        OLType.booked: 'and status<2', # wait or confirm
-        OLType.toeval: 'and status=2', # toeval
-        OLType.done: 'and status=3',   # done
+        OLType.booked: 'and status<=%s'%(OrderStatus.confirm), # wait or confirm
+        OLType.toeval: 'and status=%s'%(OrderStatus.toeval), # toeval
+        OLType.done: 'and status=%s'%(OrderStatus.toeval),   # done
         OLType.all:  ''
         }
     condition = typefilter.get(int(oltype))
@@ -430,7 +462,7 @@ class GetOrderListHandler(BaseHandler):
     # order list json
     olist = [{
       'order_id': obj.id,
-      'order_date':base.UTC2CST(obj.dt),
+      'order_date':obj.dt.strftime("%Y-%m-%d %H:%M:%S"),
       'order_type':obj.order_type,
       'order_status':obj.status,
       'start_time':obj.start_time,

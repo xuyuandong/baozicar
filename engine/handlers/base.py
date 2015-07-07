@@ -3,10 +3,13 @@
 import time, datetime, random, uuid
 import functools
 import redis
+import md5
 
 from tornado.options import define, options
 from tornado.log import app_log
 import tornado.web
+
+define("http_request_key", default="PKU", help="http request security md5 key")
 
 define("token_key", default="token", help="token parameter name")
 define("device_key", default="dev_id", help="device id parameter name")
@@ -44,7 +47,8 @@ PushType = enum(app=0, many=1, one=2)
 AppType = enum(user=0, driver=1)
 
 OrderType = enum(carpool=0, special=1)
-OrderStatus = enum(notpay=-1, wait=0, confirm=1, toeval=2, done=3, cancel=4, discard=5)
+OrderStatus = enum(notpay=-1, wait=0, confirm=1, toeval=2, done=3, \
+    cancel=4, discard=5, refunded=6)
 OLType = enum(booked=0, toeval=1, done=2, all=3)
 
 POType = enum(carpool=0, special=1)
@@ -66,7 +70,10 @@ class BaseHandler(tornado.web.RequestHandler):
       uid = self.get_secure_cookie(options.token_key, value, min_version=1)
       
       rkey = options.login_rpf + uid
-      return uid if devid == self.r.hget(rkey, 'device') else None
+      rval = self.r.hget(rkey, 'device')
+      if rval is None or devid != rval:
+        return None
+      return uid
     
     except Exception, e:
       app_log.error("authenticated exception: %s", e)
@@ -125,9 +132,20 @@ def uuid(phone):
 def UUID():
   return str(uuid.uuid1())
 
-def UTC2CST(dt):
-    dt_str = dt.strftime("%Y-%m-%d %H:%M:%S")
-    dt_arr = time.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
-    local_arr = time.localtime(time.mktime(dt_arr) + 3600*8)
-    local_str = time.strftime("%Y-%m-%d %H:%M:%S", local_arr)
-    return local_str
+def request_verify(method):
+  """Decorate methods that request source signature verify."""
+  @functools.wraps(method)
+  def wrapper(self, *args, **kwargs):
+    params = []
+    for key in sorted(args):
+      if key == 'sign' or len(args[key]) == 0:
+        continue
+      params.append( '='.join([key, args[key][0]]) )
+    
+    sign = args['sign'][0]
+    pre_sign_str = '&'.join(params)
+    if sign != md5.md5(pre_sign_str + options.http_request_key).hexdigest():
+      return
+    return method(self, *args, **kwargs)
+  return wrapper
+

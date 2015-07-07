@@ -44,10 +44,14 @@ class DriverLoginHandler(BaseHandler):
       #self.write({"status_code":201, "error_msg":"auth code error"})
       self.write({"status_code":201, "error_msg":u"验证码错误"})
       return
+    
+    app_log.info('driver phone=%s', phone)
 
     # unique user profile mapping: phone -> (device, push_id)
     rkey = options.login_rpf + phone
-    if dev_id != self.r.hget(rkey, 'device') or str(LoginType.driver) != self.r.hget(rkey, 't'):
+    if dev_id != self.r.hget(rkey, 'device') \
+      or push_id != self.r.hget(rkey, 'push') \
+      or str(LoginType.driver) != self.r.hget(rkey, 't'):
       # async bind push_id
       if not ( yield self.async_bind(phone, push_id) ):
         #self.write({"status_code":201, "error_msg":"bind push_id error"})
@@ -116,7 +120,8 @@ class DriverChangeStatusHandler(BaseHandler):
   def post(self):
     phone = self.current_user
     status = int(self.get_argument('status'))
-    
+    app_log.info('phone=%s, status=%s', phone, status)   
+ 
     # check target status 
     if status == DriverStatus.busy:
       self.write({'status_code':201, 'error_msg':'you cannot change to busy status'})
@@ -165,7 +170,8 @@ class DriverChangeRouteHandler(BaseHandler):
 
     # select priority
     table = 'cardb.t_driver'
-    sql = "select status, priority from %s where phone='%s' limit 1"%(table, phone)
+    sql = "select from_city, to_city, status, priority from %s \
+           where phone='%s' limit 1"%(table, phone)
     obj = self.db.get(sql)
 
     # check current status
@@ -174,19 +180,29 @@ class DriverChangeRouteHandler(BaseHandler):
       self.write({'status_code':201, 'error_msg':u'您有未完成的订单，不能改变路线'})
       return
 
+    # check same route
+    if obj.from_city == from_city and obj.to_city == to_city:
+      self.write({'status':200, 'error_msg':''})
+      return
+
     # update mysql
     sql = "update %s set from_city='%s', to_city='%s' where phone='%s'"\
         %(table, from_city, to_city, phone)
     self.db.execute(sql)
 
-    # update redis
-    old_path_rpq = options.driver_rpq + '-'.join([to_city, from_city])
-    path_rpq = options.driver_rpq + '-'.join([from_city, to_city])
+    # check whether update redis
+    if obj.status == DriverStatus.offline:
+      self.write({'status':200, 'error_msg':''})
+      return
 
-    pipe = self.r.pipeline()
-    pipe.zrem(old_path_rpq, phone)
-    pipe.zadd(path_rpq, phone, obj.priority)
-    pipe.execute()
+    # update redis
+    old_path_rpq = options.driver_rpq + '-'.join([obj.from_city, obj.to_city])
+    ret = self.r.zrem(old_path_rpq, phone)
+    app_log.info('zrem %s ret=%s', old_path_rpq, ret)
+    
+    new_path_rpq = options.driver_rpq + '-'.join([from_city, to_city])
+    ret = self.r.zadd(new_path_rpq, phone, obj.priority)
+    app_log.info('zadd %s ret=%s', new_path_rpq, ret)
 
     # return result
     self.write({'status':200, 'error_msg':''})
@@ -225,7 +241,7 @@ class GetPoolOrderListHandler(BaseHandler):
     # poolorder list
     polist = [{
        'poolorder_id': obj.id,
-       'poolorder_date': base.UTC2CST(obj.dt),
+       'poolorder_date': obj.dt.strftime("%Y-%m-%d %H:%M:%S"),
        'poolorder_type': obj.po_type,
        'poolorder_status': obj.status,
        'from_city': obj.from_city,
@@ -262,7 +278,7 @@ class GetPoolOrderDetailHandler(BaseHandler):
       table = table + "_" + date
 
     # select sub-orders from mysql
-    sql = "select po_type, status, from_city, to_city, price, orders\
+    sql = "select po_type, status, from_city, to_city, price, orders, last_modify\
         from %s where id=%s limit 1"%(table, poid)
     obj = self.db.get(sql)
 
@@ -305,7 +321,8 @@ class GetPoolOrderDetailHandler(BaseHandler):
           'from_city':obj.from_city,
           'to_city':obj.to_city,
           'total_price':obj.price,
-          'user_infos':uinfos
+          'user_infos':uinfos,
+          'poolorder_start_time':obj.last_modify.strftime("%Y-%m-%d %H:%M:%S")
           }
         }
     self.write(msg);
@@ -337,6 +354,13 @@ class ChangePoolOrderStatusHandler(BaseHandler):
 
 
   def confirm(self, phone, poid):
+    if not self.__confirm_check_driver(phone):
+      self.write({'status_code':201, \
+          'temp_poolorder_id': poid, 'is_new':True, \
+          'error_msg':u'亲，请先把乘客送到家再来抢单哦'})
+          #'error_msg':'driver status is not online'})
+      return
+
     # get poolorder
     postr = self.r.hget(options.poolorder_rm, poid)
     if postr is None or len(postr) == 0: # failed
@@ -406,6 +430,11 @@ class ChangePoolOrderStatusHandler(BaseHandler):
     self.write({'status_code':200, 'is_new':True, 'error_msg':'', \
         'poolorder_id':poolorder_id, 'temp_poolorder_id':poid })
 
+  def __confirm_check_driver(self, phone):
+    table = 't_driver'
+    sql = "select status from %s where phone='%s' limit 1"%(table, phone)
+    status = self.db.get(sql).status
+    return (status == DriverStatus.online)
 
   def __confirm_lock_driver(self, phone, path):
     driver_rpq = options.driver_rpq + path
@@ -619,7 +648,7 @@ class CancelPoolOrderHandler(BaseHandler):
 
       dt_str = obj.dt.strftime("%Y-%m-%d %H:%M:%S")
       dt_arr = time.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
-      order.time = (time.mktime(dt_arr) + 3600*8)
+      order.time = (time.mktime(dt_arr))
 
       thrift_obj = serialize(order)
       

@@ -4,4 +4,4 @@
 
 use cardb;
 
-drop table t_sms;
+drop table t_user;

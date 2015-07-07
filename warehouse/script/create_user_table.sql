@@ -1,5 +1,6 @@
 use cardb;
 
+## first login reward
 CREATE TABLE IF NOT EXISTS t_user (
   id     INT(10) NOT NULL AUTO_INCREMENT,
   phone  VARCHAR(16) NOT NULL,
@@ -68,7 +69,7 @@ CREATE TABLE IF NOT EXISTS t_coupon (
   deadline VARCHAR(32) NOT NULL,
   note     VARCHAR(255) NOT NULL,
   phone    VARCHAR(16) NOT NULL,
-  code     INT(10) NOT NULL,
+  code     BIGINT(20) UNSIGNED NOT NULL,
   last_modify TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   dt          TIMESTAMP NOT NULL DEFAULT 0,
   PRIMARY KEY (id),

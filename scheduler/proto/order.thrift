@@ -36,14 +36,16 @@ struct HistoryDriver {
 }
 
 struct PoolOrder {
-  1: string id,
-  2: i32 cartype,
-  3: list<Order> order_list,
-  4: i64 pushtime,
+  1: string       id,
+  2: i32          cartype,
+  3: list<Order>  order_list,
+  4: i64          pushtime,
   5: list<Driver> drivers,
-  6: double subsidy = 0.0,
-  7: i32 sstype = 0,
-  8: i32 number
+  6: double       subsidy = 0.0,
+  7: i32          sstype = 0,
+  8: i32          number,
+  9: optional string from_station,
+  10:optional string to_station
 }
 
 struct Message {
@@ -56,3 +58,4 @@ struct Message {
   7: string url,
   8: list<string> target
 }
+

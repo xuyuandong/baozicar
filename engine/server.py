@@ -19,23 +19,30 @@ from handlers.user import *
 from handlers.driver import *
 from handlers.center import *
 from handlers.alipay import *
+from handlers.operator import *
 
 define("port", default=8801, help="http port", type=int)
 define("debug", default=True, help="debug running mode")
 
-define("redis_host", default="127.0.0.1", help="redis host")
+define("redis_host", default="redis1.ali", help="redis host")
 define("redis_port", default=6379, help="redis port", type=int)
 
 class Application(tornado.web.Application):
   def __init__(self):
     request_handlers = [
         (r"/", HomeHandler),
+        (r"/get_server_time", GetServerTimeHandler),
         (r"/get_authcode", GetAuthCodeHandler),
         (r"/feedback", FeedbackHandler),
         (r"/query_path", QueryPathHandler),
         (r"/query_price", QueryPriceHandler),
-        (r"/alipay_notify", AlipayNotifyHandler),
         (r"/get_newest_version", GetNewestVersionHandler),
+        
+        (r"/alipay_notify", AlipayNotifyHandler),
+        (r"/wxpay_notify", WxpayNotifyHandler),
+
+        (r"/driver_recommend_user", DriverRecommendUserHandler),
+        (r"/wxshare_app", WxshareAppHandler),
 
         (r"/login_user", UserLoginHandler),
         (r"/save_profile", SaveProfileHandler),

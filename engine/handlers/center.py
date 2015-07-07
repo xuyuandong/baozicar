@@ -35,6 +35,16 @@ class HomeHandler(BaseHandler):
   def get(self):
     self.write("hello, please login, idiot")
 
+
+# /get_server_time
+class GetServerTimeHandler(BaseHandler):
+  def post(self):
+    #app_id = self.get_argument('app_id')
+    #platform = self.get_argument('platform')
+    timestamp = int(1000 * time.time())
+    self.write({'status_code':200, 'error_msg':'', 'server_time':timestamp})
+
+
 # /get_authcode
 class GetAuthCodeHandler(BaseHandler):
   @tornado.web.asynchronous
@@ -67,7 +77,6 @@ class GetAuthCodeHandler(BaseHandler):
     self.db.execute(sql)
 
   def sendsms(self, phone, authcode):
-    #content='尊敬的用户，您好！感谢您选择包子拼车，包子拼车验证码%s已发送到您手机上，美好城市绿色出行，包子拼车为您导航。'%(authcode)
     content = '验证码为%s。'%(authcode)
     bodylist= ['corp_id=7f24003',
         'corp_pwd=f24003',
@@ -121,7 +130,7 @@ class QueryPriceHandler(BaseHandler):
     
     person_num = int(self.get_argument('person_num'))
     order_type = int(self.get_argument('order_type'))
-    app_log.info('order_type=%s person_num=%s', order_type, person_num)
+    app_log.info('order_type=%s', order_type)
 
     # get path infomation from redis
     path = options.path_rpf + '-'.join([from_city, to_city])

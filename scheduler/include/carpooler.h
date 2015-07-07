@@ -6,6 +6,7 @@
 #include <boost/unordered_map.hpp>
 #include "base/concurrent_queue.h"
 #include "connector.h"
+#include "stations.h"
 
 namespace scheduler {
 
@@ -15,7 +16,10 @@ class PoolOrder;
 class Carpooler : public Connector {
   public:
     Carpooler(const std::string& host, int port) 
-      :Connector(host.c_str(), port) {}
+      : Connector(host.c_str(), port) {
+      station_manager_.Init(&this->redis_);  
+      cache_timestamp_ = 0;
+    }
     virtual ~Carpooler() {}
 
     void SetupOutputRedis(const std::string& carpool_rmq_name) {
@@ -33,21 +37,24 @@ class Carpooler : public Connector {
     }
 
   protected:
-    void BatchClustering(const std::string& path_id, std::vector<PoolOrder*>& pool_vec, bool timeout);
+    void Clustering(const std::string& path_id, std::vector<PoolOrder*>& pool_vec, bool timeout);
 
-    void ProcessLeftOrders(std::vector<PoolOrder*>& pool_vec);
-
-    void OutputCarpool(std::vector<PoolOrder*>& pool_vec);
-    
     bool CheckTimeOut(const std::string& path_id);
     
     void AddSpecialOrder(Order* order, std::vector<PoolOrder*>& pool_vec);
+    
+    void BatchClustering(const std::string& tag, std::vector<Order*>& orders, std::vector<PoolOrder*>& pool_vec);
 
     int GetSubsidyPrice(const std::string& path_id);
 
-    void CheckOrSubsidyOrder(std::vector<Order*>* order_vec, std::vector<PoolOrder*>& pool_vec, int subsidy_price);
+    void CheckOrSubsidyOrder(const std::string& tag, int subsidy_price, 
+        std::vector<Order*>& order_vec, std::vector<PoolOrder*>& pool_vec);
 
+    void ProcessLeftOrders(const std::string& path_id);
+    
     void SetPoolId(PoolOrder* pool_order);
+    
+    void OutputCarpool(std::vector<PoolOrder*>& pool_vec);
 
   protected:
     virtual void Run();
@@ -63,6 +70,12 @@ class Carpooler : public Connector {
     boost::unordered::unordered_map<std::string, int64_t> path_time_map_;
     boost::unordered::unordered_map<std::string, std::vector<Order*>* > batch_map_;        
 
+
+    // for subsidy cache
+    std::map<std::string, int> cache_;
+    int64_t cache_timestamp_;
+    
+    StationManager station_manager_;
 };
 
 }  // namespace scheduler

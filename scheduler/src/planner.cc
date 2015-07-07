@@ -6,6 +6,7 @@
 
 DEFINE_int32(sleep_msec_planner, 5000, "sleep time in milli-seconds when scheduler is waiting");
 DEFINE_int32(schedule_restart_period, 3600, "second period for scheduler re-send a pool order");
+DEFINE_int32(fixed_push_num, 20, "fixed driver num for one push");
 
 using namespace base;
 
@@ -51,19 +52,20 @@ void Planner::ProcessPoolOrder(PoolOrder* pool_order) {
   }
 
   // driver process: 
-  int history_num = hd.drivers.size();
+  //int history_num = hd.drivers.size();
   const Path& path = pool_order->order_list[0].path;
   std::string path_id = path.from_city + "-" + path.to_city;
   
   // 1. reduce history drivers priority
-  if (history_num == 1 && !hd.reduced) {
+  /*if (history_num == 1 && !hd.reduced) {
     VLOG(2) << "change priority for " << path_id;
     ChangePriority(path_id, hd.drivers);
     hd.reduced = true;
-  }
+  }*/
   
   // 2. fetch new drivers
-  int fetch_num = std::max(history_num << 1, 1);
+  //int fetch_num = std::max(history_num << 1, 1);
+  int fetch_num = FLAGS_fixed_push_num;
   robj = driver_rpq_.GetWithScore(path_id, 0, fetch_num);
   VLOG(2) << "fetch " << fetch_num << " drivers";
   
