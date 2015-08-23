@@ -61,6 +61,7 @@ int main(int argc, char* argv[]) {
   repacker.SetupInputQueue(pool_order_queue);
   repacker.SetupOutputRedis(FLAGS_carpool_rmq);
   repacker.SetupCheckRedis(FLAGS_order_rmq);
+  repacker.SetupAssitRedis(FLAGS_history_driver_rm);
 
   // recover
   Recovery recovery(FLAGS_host, FLAGS_port);

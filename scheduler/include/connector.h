@@ -10,7 +10,8 @@ namespace scheduler {
 
 enum CarType {
   CARPOOL = 0,
-  SPECIAL = 1
+  SPECIAL = 1,
+  BOOKING = 2
 };
 
 enum PoolType {

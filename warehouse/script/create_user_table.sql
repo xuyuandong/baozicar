@@ -12,6 +12,9 @@ CREATE TABLE IF NOT EXISTS t_user (
   INDEX (phone)
 ) ENGINE=InnoDB;
 
+alter table t_user add os varchar(32) not null default '-';
+alter table t_user add version varchar(32) not null default '-';
+
 
 CREATE TABLE IF NOT EXISTS t_order (
   id          BIGINT(20) UNSIGNED NOT NULL,
@@ -41,12 +44,16 @@ CREATE TABLE IF NOT EXISTS t_order (
   INDEX (phone)
 ) ENGINE=InnoDB;
 
+alter table t_order add driver varchar(16) not null default '-';
+alter table t_order add poolorder_id BIGINT(20) UNSIGNED not null default 0;
+alter table t_order add index POINDEX (poolorder_id); 
+
 CREATE TABLE IF NOT EXISTS t_payment (
   id           BIGINT(20) UNSIGNED NOT NULL,
   trade_no     VARCHAR(32) NOT NULL,
   order_id     BIGINT(20) UNSIGNED NOT NULL,
   price        FLOAT(8,3) NOT NULL,
-  status       INT(2)  NOT NULL,
+  status       INT(2)  NOT NULL COMMENT '0 alipay 1 wxpay',
   buyer        VARCHAR(32)  NOT NULL,
   seller       VARCHAR(32)  NOT NULL,
   buyer_id     VARCHAR(32)  NOT NULL,

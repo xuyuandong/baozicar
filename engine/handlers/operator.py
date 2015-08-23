@@ -29,27 +29,37 @@ from base import BaseHandler
 
 # /driver_recommend_user
 class DriverRecommendUserHandler(BaseHandler):
-
   @base.authenticated
   @tornado.web.asynchronous
   @tornado.gen.coroutine
-  #def get(self):
   def post(self):
     phone = self.current_user
     user = self.get_argument('user')
+    
+    # check myself
     if phone == user:
       self.write({'status_code':201, 'error_msg':u'You cannot recommend yourself'})
       return
 
+    # check already recommend
     table = 'cardb.t_drecuser'    
     sql = "select id from %s where user_phone='%s' limit 1"%(table, user)
     obj = self.db.get(sql)
     if obj is not None:
-      #self.write({'status_code':201, 'error_msg':u'The user is already recommended'})
       self.write({'status_code':201, 'error_msg':u'该乘客已经被其他大叔抢先推荐了'})
       return
 
+    # check old user
+    table = 't_user'
+    sql = "select id from %s where phone='%s' limit 1"%(table, user)
+    obj = self.db.get(sql)
+    if obj is not None:
+      self.write({'status_code':201, 'error_msg':u'亲，该乘客已经被推荐过了！'})
+      return
+
+    # check frequency
     date = datetime.datetime.now().strftime('%Y-%m-%d 00:00:00')
+    table = 'cardb.t_drecuser'    
     sql = "select count(1) as num from %s \
         where driver_phone='%s' and dt>'%s'"%(table, phone, date)
     obj = self.db.get(sql)
@@ -58,6 +68,7 @@ class DriverRecommendUserHandler(BaseHandler):
       self.write({'status_code':201, 'error_msg':u'今天您已经推荐50个乘客了，明天再推'})
       return
 
+    # recommend message
     result = '-1'
     try:
       response = yield self.sendsms(phone, user)
@@ -70,6 +81,7 @@ class DriverRecommendUserHandler(BaseHandler):
       self.write({'status_code':201, 'error_msg':u'您的推荐请求未发送成功，请稍后重试'})
       return
 
+    # record
     sql = "insert into %s (driver_phone, user_phone, status, dt) \
         values('%s', '%s', %s, null)"%(table, phone, user, 0)
     self.db.execute(sql)
@@ -85,8 +97,7 @@ class DriverRecommendUserHandler(BaseHandler):
     sql = "select url from %s where app=-1 and platform=-1"%(table)
     link = self.db.get(sql).url
 
-    content = '包子大叔推荐您使用包子拼车软件，下载地址：%s 。'%(link)
-
+    content = '感谢您一起拼车，包子大叔推荐您使用包子拼车软件，下载地址：%s 。'%(link)
     bodylist= ['corp_id=7f24003',
         'corp_pwd=f24003',
         'corp_service=10690116yd',
@@ -103,15 +114,45 @@ class DriverRecommendUserHandler(BaseHandler):
 
 # =============================================
 
-# /wxshare_app
-class WxshareAppHandler(BaseHandler):
-
+# /wxshare_code
+class WxshareCodeHandler(BaseHandler):
   @base.authenticated
   def post(self):
     phone = self.current_user
+    
     code = self.get_share_id(phone)
+    self.share_coupon(code)
+    
     self.write({'status_code':200, 'error_msg':'', 'code':code})
+  
+  def get_share_id(self, phone):
+    code = ''
+    pos = [2,4,6,8,10,9,7,5,3,1]
 
+    for p in pos:
+      code = code + phone[p]
+    if len(phone) > 11:
+      code = code + phone[11:]
+    return code
+  
+  def share_coupon(self, exchange_code):
+    value = {
+        'num': 100,  # how many people can exchange
+        'ctype': -1, # car type, 0->carpool, 1->specail car
+        'note': '好友分享奖励', # decription
+        'deadline': '', 
+        'duration': 10, # if no deadline, use 'current time + duration days'
+        'within': 200, # total price must higher than this
+        'price': 5  # coupon price
+        }
+
+    rkey = 'c_' + str(exchange_code)
+    self.r.hmset(rkey, value)
+    self.r.expire(rkey, 30*24*3600)
+
+
+# /wxshare_app
+class WxshareAppHandler(BaseHandler):
   @base.authenticated
   def post(self):
     phone = self.current_user
@@ -125,9 +166,8 @@ class WxshareAppHandler(BaseHandler):
       sql = "insert into %s (phone, code, dt) \
           values('%s', %s, null)"%(table, phone, code)
       self.db.execute(sql)
-      self.first_share_reward(phone)
+      self.first_share_reward(phone, code)
 
-    self.share_coupon(code)
     self.write({'status_code':200, 'error_msg':''})
 
   def get_share_id(self, phone):
@@ -136,10 +176,8 @@ class WxshareAppHandler(BaseHandler):
 
     for p in pos:
       code = code + phone[p]
-
     if len(phone) > 11:
       code = code + phone[11:]
-    
     return code
 
   def first_share_reward(self, phone, code):
@@ -158,17 +196,4 @@ class WxshareAppHandler(BaseHandler):
         coupon['price'], coupon['within'], coupon['deadline'], coupon['note'], phone, 1)
     self.db.execute(sql)
 
-  def share_coupon(self, exchange_code):
-    value = {
-        'num': 100,  # how many people can exchange
-        'ctype': -1, # car type, 0->carpool, 1->specail car
-        'note': '', # decription
-        'deadline': '', 
-        'duration': 10, # if no deadline, use 'current time + duration days'
-        'within': 200, # total price must higher than this
-        'price': 1  # coupon price
-        }
 
-    rkey = 'c_' + str(exchange_code)
-    self.r.hmset(rkey, value)
-    self.r.expire(rkey, 30*24*3600)

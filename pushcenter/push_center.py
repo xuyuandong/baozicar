@@ -7,24 +7,29 @@ import os
 import time
 import json
 import redis
+import random
 import logging
-
-from igetui.template import *
-from igetui.template.igt_base_template import *
-from igetui.template.igt_transmission_template import *
-from igetui.template.igt_link_template import *
-from igetui.template.igt_notification_template import *
-from igetui.template.igt_notypopload_template import *
-from igetui.template.igt_apn_template import *
 
 import tornado
 from tornado.log import app_log
 from tornado.options import define, options
-from push_util import PushUtil 
-from thrift.TSerialization import * 
 
+from thrift.TSerialization import * 
 from genpy.scheduler.ttypes import *
 
+################################
+
+from push_template import *
+from push_util import PushUtil 
+from translator import Translator
+from dbutil import DBUtil
+
+from translator import TempType, PushType, AppType, OrderType
+
+#toList接口每个用户返回用户状态开关,true：打开 false：关闭
+os.environ['needDetails'] = 'true'
+
+####################################################################
 
 define("host", default = "redis1.ali", help = "")
 define("port", default = 6379, help = "", type = int)
@@ -42,93 +47,43 @@ define("SERV_APPKEY", default = "AbUz7mQ8k199NbT9yv6UB1", help = "")
 define("SERV_APPSECRET", default = "HKxtQHnZjc9yqGbH021ET4", help = "")
 define("SERV_MASTERSECRET", default = "XCfOSceoiM8lADovc9365A", help = "")
 
-#toList接口每个用户返回用户状态开关,true：打开 false：关闭
-os.environ['needDetails'] = 'true'
 
-#数据经SDK传给客户端，由客户端代码觉得如何展现给用户
-def GetTransmissionTemplate(dobj):
-    template = TransmissionTemplate()
-    template.transmissionType = 2
-    template.appId = dobj['APPID']
-    template.appKey = dobj['APPKEY']
-    template.transmissionContent = dobj['content']
-    #iOS 推送需要的PushInfo字段 前三项必填，后四项可以填空字符串
-    #template.setPushInfo(actionLocKey, badge, message, sound, payload, locKey, locArgs, launchImage)
-    #template.setPushInfo("",2,"","","","","","");
-    return template
-
-#通知栏显示含图标、标题、内容通知，点击后激活应用, IOS不推荐
-def GetNotificationTemplate(dobj):
-    template = NotificationTemplate()
-    template.appId = dobj['APPID']
-    template.appKey = dobj['APPKEY']
-    template.transmissionType = 1
-    template.title = dobj['title']
-    template.text = dobj['text']
-    template.transmissionContent = '' #dobj['content']
-    template.logo = ""
-    template.logoURL = ""
-    template.isRing = True
-    template.isVibrate = True
-    template.isClearable = True
-    #iOS 推送需要的PushInfo字段 前三项必填，后四项可以填空字符串
-    #template.setPushInfo("open",4,"message","","","","","");
-    return template
-
-#通知栏显示含图标、标题、内容通知，点击后打开指定网页，IOS不推荐
-def GetLinkTemplate(dobj):
-    template = LinkTemplate()
-    template.appId = dobj['APPID']
-    template.appKey = dobj['APPKEY']
-    template.title = dobj['title']
-    template.text = dobj['text']
-    template.logo = ""
-    template.url = dobj['url']
-    template.transmissionType = 1
-    template.transmissionContent = dobj['content']
-    template.isRing = True
-    template.isVibrate = True
-    template.isClearable = True
-    #iOS 推送需要的PushInfo字段 前三项必填，后四项可以填空字符串
-    #template.setPushInfo("open",4,"message","test1.wav","","","","");
-    return template
 
 ####################################################################
-# ttype: template type, 0: Transmission, 1: Notification, 2: Link
-# ptype: push type, 0: App, 1: List, 2: Single
-def enum(**enums):
-  return type('Enum', (), enums)
-TempType = enum(trans=0, notify=1, link=2)
-PushType = enum(app=0, many=1, one=2)
-AppType = enum(user=0, driver=1)
-
 class PushCenter(object):
   def __init__(self):
+    self.db = DBUtil()
     self.redis = redis.ConnectionPool(
         host=options.host,
         port=options.port
         )
+    
     self.pusher = {
         AppType.user: PushUtil(options.USER_APPID, options.USER_APPKEY, options.USER_MASTERSECRET),
         AppType.driver: PushUtil(options.SERV_APPID, options.SERV_APPKEY, options.SERV_MASTERSECRET)
         }
+    
     self.templateAction = {
         TempType.trans: GetTransmissionTemplate,
         TempType.notify: GetNotificationTemplate,
         TempType.link: GetLinkTemplate,
         }
+    
     self.pushAction = {
         PushType.app: lambda p, temp, tar: p.ToApp(temp, tar),
         PushType.many: lambda p, temp, tar: p.ToList(temp, tar),
         PushType.one: lambda p, temp, tar: p.ToSingle(temp, tar)
         }
+    
+    self.translator = Translator(self)
     self.translateAction = {
-        'test': self.TranslateTest,
-        'poolorder': self.TranslatePoolOrder,
-        'confirm_poolorder': self.TranslateConfirmOrder,
-        'cancel_poolorder': self.TranslateCancelOrder,
-        'system_note': self.TranslateSystemNote
+        'poolorder': self.translator.PoolOrder,
+        'confirm_poolorder': self.translator.ConfirmPoolOrder,
+        'cancel_booking_poolorder': self.translator.CancelBookingPoolOrder,
+        'booking_deal': self.translator.BookingDeal,
+        'system_notify': self.translator.SystemNotify
         }
+    
     self.appId = {
         AppType.user: options.USER_APPID,
         AppType.driver: options.SERV_APPID
@@ -141,14 +96,16 @@ class PushCenter(object):
   @property
   def r(self):
     return redis.Redis(connection_pool = self.redis)
-
+  
   def push(self, tobj):
-    dobj = self.__translate_message(tobj)
+    title = tobj.title
+    app_log.info('push translate %s', title)
+    
+    dobj = self.translateAction.get(title)(tobj)
     app_log.info("push json\t%s", dobj)
     
-    atype = tobj.app_type
-    pusher = self.pusher.get(atype)
-    app_log.info("push atype %s", atype)
+    pusher = self.pusher.get(tobj.app_type)
+    app_log.info("push app_type %s", tobj.app_type)
 
     ptype = tobj.push_type
     target = []
@@ -179,70 +136,6 @@ class PushCenter(object):
 
     return result
 
-  def __translate_message(self, tobj):
-    title = tobj.title
-    app_log.info('push translate %s', title)
-    return self.translateAction.get(title)(tobj)
-
-  def TranslateTest(self, tobj):
-    d = {'ttype': [tobj.template_type],
-         'ptype': tobj.push_type,
-         'title': tobj.title,
-         'text':  tobj.text,
-         'url':   tobj.url,
-         'content': tobj.content,
-         'target':tobj.target,
-         'APPID': self.appId[tobj.app_type],
-         'APPKEY':self.appKey[tobj.app_type]
-        }
-    return d
-
-  def TranslatePoolOrder(self, tobj):
-    d = {'ttype': [TempType.trans, TempType.notify],
-         'ptype': tobj.push_type,
-         'title': u'包子拼车新订单信息', #tobj.title,
-         'text':  u'有新的订单来了，赶快来抢吧', #tobj.text,
-         'url':   tobj.url,
-         'target':tobj.target,
-         'APPID': self.appId[tobj.app_type],
-         'APPKEY':self.appKey[tobj.app_type]
-        }
-    try:
-      po = PoolOrder()
-      po = deserialize(po, tobj.content)
-      d['content'] = json.dumps( {'title':'poolorder', 'poolorder_id':po.id} ) 
-    except Exception, e:
-      app_log.error("deserialize thrift error, ", e)
-    return d
-
-  def TranslateConfirmOrder(self, tobj):
-    d = {'ttype': [TempType.trans, TempType.notify],
-         'ptype': tobj.push_type,
-         'title': u'包子拼车推送信息', #tobj.title,
-         'text':  u'您的订单已有司机接单啦，赶紧查看吧', #tobj.text,
-         'content': tobj.content,
-         'url':   tobj.url,
-         'target':tobj.target,
-         'APPID': self.appId[tobj.app_type],
-         'APPKEY':self.appKey[tobj.app_type]
-        }
-    return d
-
-  def TranslateCancelOrder(self, tobj):
-    d = {'ttype': [tobj.template_type],
-         'ptype': tobj.push_type,
-         'title': u'包子拼车推送信息', #tobj.title,
-         'text':  u'您的订单已被司机取消，系统将重新为您安排司机，请查看详情', #tobj.text,
-         'content': tobj.content,
-         'url':   tobj.url,
-         'target':tobj.target,
-         'APPID': self.appId[tobj.app_type],
-         'APPKEY':self.appKey[tobj.app_type]
-        }
-    return d
-
-  def TranslateSystemNote(self, tobj):
-    pass
 
 #######################################################
 def SetupLogger():
@@ -255,9 +148,27 @@ def SetupLogger():
   
   logging.getLogger("tornado.application").addHandler(handler)
 
+
+def PushOnce(pc, msg):
+  success = True
+  
+  try:    
+    results = pc.push(msg)
+    for ret in results:
+      verb = ret['result'].lower()
+      if verb != 'ok' and verb != 'notarget':
+        success = False
+        break
+  except Exception, e:
+    app_log.error("push exception: %s", e)
+    success = False
+    
+  return success
+
+
+#########################################################
 def main():
   SetupLogger()
-    
   pc = PushCenter()
   
   while (1):
@@ -266,26 +177,25 @@ def main():
       time.sleep(5)
       continue
 
-    try:
-      msg = Message()
-      msg = deserialize(msg, obj[1])
-      results = pc.push(msg)
-      
-      success = True
-      for ret in results:
-        verb = ret['result'].lower()
-        if verb != 'ok' and verb != 'notarget':
-          success = False
-          break
-      
-      #if not success:
-      #  pc.r.lpush(options.queue, obj[1])
-    
-    except Exception, e:
-      app_log.error("push exception: %s", e)
-
+    msg = Message()
+    msg = deserialize(msg, obj[1])
+    random.shuffle(msg.target)
  
-
+    ok = 0
+    step = 10
+    start = 0
+    target = msg.target
+    while len(target) > start:
+      msg.target = target[start : start + step]
+      start = start + step
+      if PushOnce(pc, msg):
+        ok = ok + 1
+    
+    if ok == 0:
+      app_log.info('push message failed %s', msg.title)
+      pc.r.lpush(options.queue, obj[1])
+      
+ 
 if __name__ == '__main__':
   tornado.options.parse_command_line()
   main()

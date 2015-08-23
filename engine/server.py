@@ -20,6 +20,8 @@ from handlers.driver import *
 from handlers.center import *
 from handlers.alipay import *
 from handlers.operator import *
+from handlers.user_core import *
+from handlers.driver_core import *
 
 define("port", default=8801, help="http port", type=int)
 define("debug", default=True, help="debug running mode")
@@ -31,6 +33,8 @@ class Application(tornado.web.Application):
   def __init__(self):
     request_handlers = [
         (r"/", HomeHandler),
+        (r"/index.html", IndexHandler),
+
         (r"/get_server_time", GetServerTimeHandler),
         (r"/get_authcode", GetAuthCodeHandler),
         (r"/feedback", FeedbackHandler),
@@ -40,9 +44,11 @@ class Application(tornado.web.Application):
         
         (r"/alipay_notify", AlipayNotifyHandler),
         (r"/wxpay_notify", WxpayNotifyHandler),
+        (r"/unionpay_notify2", UnionpayNotifyHandler),
 
         (r"/driver_recommend_user", DriverRecommendUserHandler),
         (r"/wxshare_app", WxshareAppHandler),
+        (r"/wxshare_code", WxshareCodeHandler),
 
         (r"/login_user", UserLoginHandler),
         (r"/save_profile", SaveProfileHandler),
@@ -55,8 +61,10 @@ class Application(tornado.web.Application):
         (r"/get_order_detail", GetOrderDetailHandler),
         (r"/submit_comment", SubmitCommentHandler),
         (r"/read_confirmed_order", ReadConfirmedOrderHandler),
+        (r"/get_confirmed_driver", GetConfirmedDriverHandler),
 
         (r"/login_driver", DriverLoginHandler),
+        (r"/get_driver_status", GetDriverStatusHandler),
         (r"/change_driver_status", DriverChangeStatusHandler),
         (r"/change_driver_route", DriverChangeRouteHandler),
         (r"/get_poolorder_list", GetPoolOrderListHandler),
@@ -69,6 +77,7 @@ class Application(tornado.web.Application):
     settings = dict(
       cookie_secret = "abcdefghijkmlnopqrstuvwxyz",
       template_path = os.path.join(os.path.dirname(__file__), "templates"),
+      static_path = os.path.join(os.path.dirname(__file__), "static"),
       login_url = "/",
      # xsrf_cookies = True,
       debug = options.debug

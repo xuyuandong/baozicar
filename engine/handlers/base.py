@@ -18,6 +18,7 @@ define("super_token", default="showmeng1234", help="super manager token")
 define('authcode_rpf', default='auth_', help="redis authcode key prefix as map")
 define('login_rpf', default='login_', help="redis login user profile key prefix as map")
 define('path_rpf', default='path_', help='redis map for path information')
+define('poolarea_rpf', default='poolarea_', help='redis map for poolarea information')
 
 define('order_rq', default='l_order', help='redis order list for scheduler input')
 define('order_rm', default='h_order', help='redis order map for scheduler input')
@@ -46,9 +47,9 @@ TempType = enum(trans=0, notify=1, link=2)
 PushType = enum(app=0, many=1, one=2)
 AppType = enum(user=0, driver=1)
 
-OrderType = enum(carpool=0, special=1)
+OrderType = enum(carpool=0, special=1, booking=2)
 OrderStatus = enum(notpay=-1, wait=0, confirm=1, toeval=2, done=3, \
-    cancel=4, discard=5, refunded=6)
+    cancel=4, discard=5)
 OLType = enum(booked=0, toeval=1, done=2, all=3)
 
 POType = enum(carpool=0, special=1)
@@ -60,19 +61,28 @@ DriverStatus = enum(online=0, offline=1, busy=2)
 
 class BaseHandler(tornado.web.RequestHandler):
 
+  def system(self):
+    self.write({'status_code':201, 'error_msg':u'系统升级中，敬请期待!'})
+
   def set_secure_cookie(self, key, value):
-    return self.create_signed_value(key, value, version=1)
+    token = self.create_signed_value(key, value, version=1)
+    self.set_cookie(key, token, expires_days=None)
+    return token
 
   def get_current_user(self):
     try:
       value = self.get_argument(options.token_key)
       devid = self.get_argument(options.device_key)
       uid = self.get_secure_cookie(options.token_key, value, min_version=1)
-      
+      #app_log.info('authenticate phone = %s', uid)
+
       rkey = options.login_rpf + uid
       rval = self.r.hget(rkey, 'device')
       if rval is None or devid != rval:
+        app_log.info('authenticate failed rval=%s, devid=%s', rval, devid)
         return None
+      
+      app_log.info('request phone = %s', uid)
       return uid
     
     except Exception, e:

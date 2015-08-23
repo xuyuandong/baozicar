@@ -45,7 +45,8 @@ struct PoolOrder {
   7: i32          sstype = 0,
   8: i32          number,
   9: optional string from_station,
-  10:optional string to_station
+  10:optional string to_station,
+  11:optional i64 birthday
 }
 
 struct Message {

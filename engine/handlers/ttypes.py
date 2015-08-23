@@ -518,6 +518,9 @@ class PoolOrder:
    - subsidy
    - sstype
    - number
+   - from_station
+   - to_station
+   - birthday
   """
 
   thrift_spec = (
@@ -530,9 +533,12 @@ class PoolOrder:
     (6, TType.DOUBLE, 'subsidy', None, 0, ), # 6
     (7, TType.I32, 'sstype', None, 0, ), # 7
     (8, TType.I32, 'number', None, None, ), # 8
+    (9, TType.STRING, 'from_station', None, None, ), # 9
+    (10, TType.STRING, 'to_station', None, None, ), # 10
+    (11, TType.I64, 'birthday', None, None, ), # 11
   )
 
-  def __init__(self, id=None, cartype=None, order_list=None, pushtime=None, drivers=None, subsidy=thrift_spec[6][4], sstype=thrift_spec[7][4], number=None,):
+  def __init__(self, id=None, cartype=None, order_list=None, pushtime=None, drivers=None, subsidy=thrift_spec[6][4], sstype=thrift_spec[7][4], number=None, from_station=None, to_station=None, birthday=None,):
     self.id = id
     self.cartype = cartype
     self.order_list = order_list
@@ -541,6 +547,9 @@ class PoolOrder:
     self.subsidy = subsidy
     self.sstype = sstype
     self.number = number
+    self.from_station = from_station
+    self.to_station = to_station
+    self.birthday = birthday
 
   def read(self, iprot):
     if iprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None and fastbinary is not None:
@@ -603,6 +612,21 @@ class PoolOrder:
           self.number = iprot.readI32()
         else:
           iprot.skip(ftype)
+      elif fid == 9:
+        if ftype == TType.STRING:
+          self.from_station = iprot.readString()
+        else:
+          iprot.skip(ftype)
+      elif fid == 10:
+        if ftype == TType.STRING:
+          self.to_station = iprot.readString()
+        else:
+          iprot.skip(ftype)
+      elif fid == 11:
+        if ftype == TType.I64:
+          self.birthday = iprot.readI64()
+        else:
+          iprot.skip(ftype)
       else:
         iprot.skip(ftype)
       iprot.readFieldEnd()
@@ -651,6 +675,18 @@ class PoolOrder:
       oprot.writeFieldBegin('number', TType.I32, 8)
       oprot.writeI32(self.number)
       oprot.writeFieldEnd()
+    if self.from_station is not None:
+      oprot.writeFieldBegin('from_station', TType.STRING, 9)
+      oprot.writeString(self.from_station)
+      oprot.writeFieldEnd()
+    if self.to_station is not None:
+      oprot.writeFieldBegin('to_station', TType.STRING, 10)
+      oprot.writeString(self.to_station)
+      oprot.writeFieldEnd()
+    if self.birthday is not None:
+      oprot.writeFieldBegin('birthday', TType.I64, 11)
+      oprot.writeI64(self.birthday)
+      oprot.writeFieldEnd()
     oprot.writeFieldStop()
     oprot.writeStructEnd()
 
@@ -668,6 +704,9 @@ class PoolOrder:
     value = (value * 31) ^ hash(self.subsidy)
     value = (value * 31) ^ hash(self.sstype)
     value = (value * 31) ^ hash(self.number)
+    value = (value * 31) ^ hash(self.from_station)
+    value = (value * 31) ^ hash(self.to_station)
+    value = (value * 31) ^ hash(self.birthday)
     return value
 
   def __repr__(self):

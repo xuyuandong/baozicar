@@ -1,4 +1,5 @@
 #include "stations.h"
+#include <cmath>
 #include <algorithm>
 #include "order_types.h"
 #include "base/string_util.h"
@@ -7,13 +8,12 @@
 DEFINE_int32(station_cache_expire_time, 3600, "expire time in seconds for station cache re-read redis");
 DEFINE_string(station_rset, "station", "redis set for path stations");
 
-using namespace boost::unordered;
 
 namespace scheduler {
 
 void StationManager::Init(base::Redispp* redis) {
   rset_.Init(redis, FLAGS_station_rset);
-  cache_timestamp_ = 0;
+  station_cache_.SetExpireTime(FLAGS_station_cache_expire_time);
 }
 
 void StationManager::FetchStations(const Order* order, std::vector<std::string>* stations) {
@@ -66,18 +66,11 @@ bool StationManager::GetNearestStation(const Station& city, std::string* station
 }
 
 void StationManager::GetAllStations(const std::string& city, std::vector<Station>* stations) {
-  int64_t current_time = base::GetTimeInSec() ;
-  if (current_time < cache_timestamp_) {
-    VLOG(5) << "fetch station cache";
-    if (cache_.find(city) != cache_.end()) {
-      *stations = cache_[city];
-      return;
-    }
-  } else {  // cache expire
-    VLOG(5) << "expired, clear cache";
-    cache_.clear();
-  }
- 
+  VLOG(5) << "fetch station cache";
+  if (station_cache_.Fetch(city, stations)) {
+    return;
+  } 
+
   // fetch redis
   VLOG(5) << "fetch station redis";
   stations->clear();
@@ -123,11 +116,7 @@ void StationManager::GetAllStations(const std::string& city, std::vector<Station
   }
 
   // write to cache
-  VLOG(5) << "write to cache";
-  if (cache_.size() == 0) {
-    cache_timestamp_ = current_time + FLAGS_station_cache_expire_time; 
-  }
-  cache_[city] = *stations;
+  station_cache_.Write(city, *stations);
 }
 
 double StationManager::CalcDistance(double lng1, double lat1, double lng2, double lat2) {

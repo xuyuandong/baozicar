@@ -31,16 +31,19 @@ define("baidu_api_key", default='ak=286e2613aa2e671c497b40cdcc5f06e7', help='')
 # /
 class HomeHandler(BaseHandler):
   @base.access_restricted
-  # def post(self):
   def get(self):
-    self.write("hello, please login, idiot")
+    return self.system()
+
+# /index.html
+class IndexHandler(BaseHandler):
+  @base.access_restricted
+  def get(self):
+    self.render("index.html")
 
 
 # /get_server_time
 class GetServerTimeHandler(BaseHandler):
   def post(self):
-    #app_id = self.get_argument('app_id')
-    #platform = self.get_argument('platform')
     timestamp = int(1000 * time.time())
     self.write({'status_code':200, 'error_msg':'', 'server_time':timestamp})
 
@@ -51,13 +54,13 @@ class GetAuthCodeHandler(BaseHandler):
   @tornado.gen.coroutine
   def get(self):
     phone = self.get_argument("phone")
-    authcode = str(random.randint(1000, 9999))
+    authcode = '1234' #str(random.randint(1000, 9999))
 
     result = '-1'
     try:
       self.r.set(options.authcode_rpf + phone, authcode, ex = 300)
-      response = yield self.sendsms(phone, authcode)
-      result = response.body
+      #response = yield self.sendsms(phone, authcode)
+      result = '0'#response.body
     except Exception, e:
       app_log.error('sms exception %s', e)
       #self.write({'status_code':201, 'error_msg':'system exception'})
@@ -100,6 +103,12 @@ class QueryPathHandler(BaseHandler):
   def post(self): # TODO: check api
     from_city = self.get_argument('from_city')
 
+    # get all possible from_citys
+    if len(from_city) == 0:
+      self.get_from_citys()
+      return
+
+    # get all possible to_citys
     table = 'cardb.t_path'
     sql = "select to_city from %s where from_city='%s';"%(table, from_city)
     objlist = self.db.query(sql)
@@ -112,6 +121,18 @@ class QueryPathHandler(BaseHandler):
         }
     self.write(msg)
 
+  def get_from_citys(self):
+    table = 'cardb.t_path'
+    sql = "select distinct(from_city) from %s"%(table)
+    objlist = self.db.query(sql)
+    
+    result = [ obj.from_city for obj in objlist ]
+    msg = {
+        'status_code':200,
+        'error_msg':'',
+        'from_city_list':result
+        }
+    self.write(msg)
 
 # /query_price
 class QueryPriceHandler(BaseHandler):
@@ -135,7 +156,7 @@ class QueryPriceHandler(BaseHandler):
     # get path infomation from redis
     path = options.path_rpf + '-'.join([from_city, to_city])
     path_obj = self.r.hgetall(path)
-    if path_obj is None or len(path_obj) < 15:
+    if path_obj is None or len(path_obj) < 10:
       #self.write({'status_code':201, 'error_msg':'No information for this path in redis'})
       self.write({'status_code':201, 'error_msg':u'系统中不存在此线路信息'})
       return
@@ -150,6 +171,10 @@ class QueryPriceHandler(BaseHandler):
     dst_lng = float(path_obj['to_lng'])
     dst_scale = float(path_obj['to_scale'])
     to_dist = dst_scale * self.calc_distance(to_lat, to_lng, dst_lat, dst_lng)
+
+    # mileage
+    mid_dist = self.calc_distance(src_lat, src_lng, dst_lat, dst_lng)
+    mileage = from_dist + mid_dist + to_dist
 
     # calculate price
     hour = 'h%s'%(time.localtime().tm_hour)
@@ -174,6 +199,10 @@ class QueryPriceHandler(BaseHandler):
     total_price = from_price + path_price + to_price + hour_price 
     taxi_price = 4.6 * self.calc_distance(to_lat, to_lng, from_lat, from_lng)
 
+    # inside carpool area
+    inside = self.inside_carpool_area(from_city, from_lng, from_lat, to_city, to_lng, to_lat)
+    maxmile = float(path_obj['maxmile']) if 'maxmile' in path_obj else 10000
+
     # result
     msg = {
         'status_code': 200,
@@ -183,101 +212,105 @@ class QueryPriceHandler(BaseHandler):
         'to_price': to_price,
         'path_price': path_price,
         'hour_price': hour_price,
-        'taxi_price': taxi_price
+        'taxi_price': taxi_price,
+        'mileage': mileage,
+        'maxmile': maxmile,
+        'inside_carpool_area': inside
         }
-    app_log.info(msg)
+    #app_log.info(msg)
     self.write(msg)
 
+  def inside_carpool_area(self, from_city, from_lng, from_lat, to_city, to_lng, to_lat):
+    try:
+      src_key = options.poolarea_rpf + from_city
+      src_lng, src_lat, src_len = self.r.hmget(src_key, 'lng', 'lat', 'threshold')
+      from_len = self.calc_distance(from_lat, from_lng, float(src_lat), float(src_lng))
+
+      dst_key = options.poolarea_rpf + to_city
+      dst_lng, dst_lat, dst_len = self.r.hmget(dst_key, 'lng', 'lat', 'threshold')
+      to_len = self.calc_distance(to_lat, to_lng, float(dst_lat), float(dst_lng))
+    
+      if from_len > float(src_len) or to_len > float(dst_len):
+        return False
+    except Exception, e:
+      app_log.error('failed to judge inside carpool area [%s]', e)
+    
+    return True
+
   def calc_distance(self, lat1, lng1, lat2, lng2):
+    #ll = '%s %s, %s %s'%(lat1, lng1, lat2, lng2)
     lng1, lat1, lng2, lat2 = map(radians, [lng1, lat1, lng2, lat2])
     a = lat1 - lat2
     b = lng1 - lng2
     s = 2 * asin( sqrt( pow( sin(a/2), 2) + cos(lat1) * cos(lat2) * pow( sin(b/2), 2) ) )
+    #ll = ll + ' => %s'%(s * 6378.137)
+    #app_log.info(ll)
     return s * 6378.137
 
 
-# /query_price2
-class QueryPriceHandler2(BaseHandler):
-  #@base.authenticated
-  @tornado.web.asynchronous
-  @tornado.gen.coroutine
+# /get_price_detail
+class GetPriceDetailHandler(BaseHandler):
   def post(self):
     from_city = self.get_argument('from_city')
-    from_place = self.get_argument('from_place')
     to_city = self.get_argument('to_city')
-    to_place = self.get_argument('to_place')
-    person_num = self.get_argument('person_num')
-
-    # city 2 city price
+    
+    # get path infomation from redis
     path = options.path_rpf + '-'.join([from_city, to_city])
     path_obj = self.r.hgetall(path)
-    if path_obj is None:
-      self.write({'status_code':201, 'error_msg':'no price for this path in redis'})
+    if path_obj is None or len(path_obj) < 15:
+      self.write({'status_code':201, 'error_msg':u'系统中不存在此线路信息'})
       return
 
-    # from city local price
-    from_params = ['origin=%s'%(from_place),
-        'destination=%s'%(from_city),
-        'origin_region=%s'%(from_city),
-        'destination_region=%s'%(from_city)]
-    from_response = yield self.direction_api(from_params)
-    from_result = self.parse_json(from_response.body)
-    if len(from_result) == 0:
-      self.write({'status_code':201, 'error_msg':'no result for from_place when querying baidu map'})
-      return
-
-    # to city local price
-    to_params = ['origin=%s'%(to_place),
-        'destination=%s'%(to_city),
-        'origin_region=%s'%(to_city),
-        'destination_region=%s'%(to_city)]
-    to_response = yield self.direction_api(to_params)
-    to_result = self.parse_json(to_response.body)
-    if len(to_result) == 0:
-      self.write({'status_code':201, 'error_msg':'no result for to_place when querying baidu map'})
-      return
-
-    # calculate total price
-    hour = time.localtime().tm_hour
-    from_price = from_result['baidu_price']
-    to_price = to_result['baidu_price']
-    price = path_obj['price'] * int(person_num) + from_price + to_price
-
-    msg = {
-        'status_code': 200,
-        'error_msg': '',
-        'price': price,
-        'from_price': from_result,
-        'to_price': to_result,
-        'path_price': int(path_value)
+    msg = {'status_code':200,
+        'error_msg':'',
+        'start_miles':0,
+        'start_price':0,
+        'over_price_permile':0
         }
     self.write(msg)
 
-  def parse_json(self, json_str):
+
+# /feedback
+class FeedbackHandler(BaseHandler):
+  @base.authenticated
+  def post(self):
+    phone = self.current_user
+    content = self.get_argument('content')
+
+    if len(content) > 1024:
+      content = content[0:1024]
+
+    table = 'cardb.t_feedback'
+    sql = "insert into %s (phone, content) \
+        values('%s', '%s');"%(table, phone, content)
+    self.db.execute(sql)
+
+    self.write({'status_code':200, 'error_msg':''})
+
+
+# /get_newest_version
+class GetNewestVersionHandler(BaseHandler):
+  #@base.authenticated
+  def post(self):
     try:
-      jdict = json.loads(json_str)
-      if jdict['status'] != 0 or jdict['type'] != 2:
-        app_log.info('json status = %s, type = %s', jdict['status'], jdict['type'])
-        return {}
-      
-      taxi = jdict['result']['taxi']
-      result = {
-            'distance': int(taxi['distance']),
-            'duration': int(taxi['duration']),
-            'baidu_price': int(taxi['detail'][0]['total_price'])
-          }
-      return result
-
+      app = self.get_argument('app_id')
+      platform = self.get_argument('platform')
     except Exception, e:
-      app_log.info('%s', e)
-      return {}
+      app = 0
+      platform = 0
 
-  def direction_api(self, params):
-    params.append(options.baidu_api_key)
-    url = options.baidu_direction_url + '&'.join(params)
+    table = 'cardb.t_version'
+    sql = "select version, url from %s \
+        where app=%s and platform=%s limit 1"%(table, app, platform);
+    try:
+      obj = self.db.get(sql)
+    except Exception, e:
+      self.write({'status_code':201, 'error_msg':''})
+      return
 
-    client = AsyncHTTPClient()
-    return client.fetch(url)
+    msg = {'status_code':200, 'error_msg':'',
+        'version':obj.version, 'url':obj.url}
+    self.write(msg)
 
 
 # /feedback

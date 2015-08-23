@@ -35,6 +35,7 @@ def CheckStatus(r, order_list):
       return False
   return True
 
+
 def ConfirmOrder(r, order_list):
   for id in order_list:
     TryLock(r, id)

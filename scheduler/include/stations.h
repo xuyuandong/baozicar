@@ -1,10 +1,10 @@
 #ifndef _STATIONS_H_
 #define _STATIONS_H_
 
-#include <map>
 #include <vector>
-#include <boost/unordered_map.hpp>
+#include <string>
 #include "redispp.h"
+#include "cache.h"
 
 namespace scheduler {
 
@@ -28,8 +28,7 @@ class StationManager {
     double CalcDistance(double lng1, double lat1, double lng2, double lat2);
 
   private:
-    std::map<std::string, std::vector<Station> > cache_;
-    int64_t cache_timestamp_;
+    Cache<std::vector<Station> > station_cache_;
     base::RedisSet rset_;
 
 };

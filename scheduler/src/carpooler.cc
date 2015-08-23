@@ -19,6 +19,16 @@ DEFINE_int32(subsidy_cache_expire_time, 3600, "expire time in seconds for subsid
 using namespace boost::unordered;
 
 namespace scheduler {
+    
+Carpooler::Carpooler(const std::string& host, int port) 
+  : Connector(host.c_str(), port) {
+  station_manager_.Init(&this->redis_);  
+  
+  loop_timestamp_ = 0;
+  
+  subsidy_cache_.SetExpireTime(FLAGS_subsidy_cache_expire_time);
+  pool_size_cache_.SetExpireTime(FLAGS_subsidy_cache_expire_time);
+}
 
 void Carpooler::Run() {
   while (true) {
@@ -42,14 +52,8 @@ void Carpooler::Run() {
       // batch clustering if some path's orders could 
       bool timeout = CheckTimeOut(path_id);
       timeout = timeout || (path_count_map_[path_id] > FLAGS_batch_size);
-      VLOG(4) << "timeout flag = " << timeout;
-      if (timeout) {
-        VLOG(2) << "batch clustering " << path_id;
-        Clustering(path_id, pool_vec, timeout);  // NOTE: will change batch_map_ and path_count_map_  
-      } else {
-        VLOG(2) << "process left orders " << path_id;
-        ProcessLeftOrders(path_id);
-      }
+      VLOG(2) << "timeout flag=" << timeout << " for path clustering " << path_id;
+      Clustering(path_id, pool_vec, timeout);  // NOTE: will change batch_map_ and path_count_map_  
 
       // output several times to protect poolorder vector to be too large at busy times
       if (pool_vec.size() > 0) {
@@ -57,13 +61,38 @@ void Carpooler::Run() {
         OutputCarpool(pool_vec);
       }
     }
-    
+  
+    if (CheckLoopTimeout()) {
+      VLOG(4) << "empty queue and loop for timeout path ...";
+      unordered_map<std::string, std::vector<Order*>* >::iterator it;
+      for (it = batch_map_.begin(); it != batch_map_.end(); ++it) {
+        const std::string& path_id = it -> first;
+        VLOG(2) << "loop path clustering " << path_id;
+        Clustering(path_id, pool_vec, true);
+      }
+
+      if (pool_vec.size() > 0) {
+        VLOG(2) << "loop output carpool ...";
+        OutputCarpool(pool_vec);
+      }
+    }
+
     // sleep
     if (in_queue_->Empty()) {
       VLOG(5) << "carpooler sleep " << FLAGS_sleep_msec_carpooler << " msec";
       base::MilliSleep(FLAGS_sleep_msec_carpooler);
     }
   }
+}
+
+bool Carpooler::CheckLoopTimeout() {
+  int64_t current_time = base::GetTimeInSec() ;
+  int64_t interval = current_time - loop_timestamp_;
+  if (interval > FLAGS_cluster_interval) {
+    loop_timestamp_ = current_time;
+    return true;
+  }
+  return false;
 }
 
 bool Carpooler::CheckTimeOut(const std::string& path_id) {
@@ -92,7 +121,7 @@ void Carpooler::AddSpecialOrder(Order* order, std::vector<PoolOrder*>& pool_vec)
 
   PoolOrder* po = new PoolOrder();
   po->order_list.push_back(*order);
-  po->cartype = SPECIAL;
+  po->cartype = order->cartype;
   po->__set_from_station(stations.front());
   po->__set_to_station(stations.back());
 
@@ -106,7 +135,7 @@ void Carpooler::Clustering(const std::string& path_id, std::vector<PoolOrder*>& 
   
   VLOG(3) << "special car clustering ...";
   for (size_t i = 0; i < order_vec.size(); ++i) {
-    if (order_vec[i]->cartype == SPECIAL) {
+    if (order_vec[i]->cartype >= SPECIAL) {
       AddSpecialOrder(order_vec[i], pool_vec);
       delete order_vec[i]; 
       order_vec[i] = NULL;
@@ -147,7 +176,8 @@ void Carpooler::Clustering(const std::string& path_id, std::vector<PoolOrder*>& 
   
   VLOG(3) << "carpool clustering within each station tag ...";
   for (it = station_map.begin(); it != station_map.end(); ++it) {
-    BatchClustering(it->first, it->second, pool_vec);
+    VLOG(4) << "batch cluster station path => " << it->first;
+    BatchClustering(path_id, it->first, it->second, pool_vec);
   }
 
   VLOG(3) << "check subsidy for long waiting order";
@@ -155,10 +185,12 @@ void Carpooler::Clustering(const std::string& path_id, std::vector<PoolOrder*>& 
   VLOG(4) << "get subsidy " << ssprice << " for " << path_id;
   for (it = station_map.begin(); it != station_map.end(); ++it) {
     if (it->second.size() > 0) {
-      if (ssprice > 0) {
+      if (ssprice >= 0) {
         const std::string& tag = it->first;
+        VLOG(4) << "check subsidy station path => " << tag;
         CheckOrSubsidyOrder(tag, ssprice, it->second, pool_vec);
       } else {
+        VLOG(4) << "put to recheck station path => " << it->first;
         const std::vector<Order*>& vec = it->second;
         for (size_t i = 0; i < vec.size(); ++i) {
           out_queue_->Push(vec[i]);
@@ -174,25 +206,48 @@ void Carpooler::Clustering(const std::string& path_id, std::vector<PoolOrder*>& 
   path_count_map_[path_id] = 0;
 }
 
-void Carpooler::ProcessLeftOrders(const std::string& path_id) {
-  std::vector<Order*>& left_orders = *batch_map_[path_id];
-  for (size_t i = 0; i < left_orders.size(); ++i) {
-    out_queue_->Push(left_orders[i]);
+int Carpooler::GetPoolSize(const std::string& path_id) {
+  int pool_size = FLAGS_pool_size;
+  if (pool_size_cache_.Fetch(path_id, &pool_size)) {
+    return pool_size;
+  } else {
+    base::ReplyObj robj;
+    robj = path_rsm_.Get(path_id, "maxnum");
+    if (robj.OK()) {
+      std::string maxnum_str(robj.Str());
+      pool_size = StringToInt(maxnum_str);
+    }
+    pool_size_cache_.Write(path_id, pool_size);
   }
-  batch_map_[path_id]->clear();
-  path_count_map_[path_id] = 0;
+  return pool_size;
 }
 
+int Carpooler::GetSubsidyPrice(const std::string& path_id) {
+  int subsidy = -1;
+  if (subsidy_cache_.Fetch(path_id, &subsidy)) {
+    return subsidy;
+  } else {
+    base::ReplyObj robj;
+    robj = path_rsm_.Get(path_id, "subsidy");
+    if (robj.OK()) {
+      std::string subsidy_str(robj.Str());
+      subsidy = StringToInt(subsidy_str);
+    }
+    subsidy_cache_.Write(path_id, subsidy);
+  }
+  return subsidy;
+}
 
 bool CompareOrder(const Order* o1, const Order* o2) {
   return o1->number > o2->number;
 }
 
-void Carpooler::BatchClustering(const std::string& tag, 
+void Carpooler::BatchClustering(const std::string& path_id, const std::string& tag, 
     std::vector<Order*>& orders, std::vector<PoolOrder*>& pool_vec) {
   std::vector<std::string> stations;
   SplitString(tag, '|', &stations);
-  
+  int pool_size = GetPoolSize(path_id);
+
   std::sort(orders.begin(), orders.end(), CompareOrder);
 
   int head = 0, tail = orders.size();
@@ -204,7 +259,7 @@ void Carpooler::BatchClustering(const std::string& tag,
 
     VLOG(4) << "->" << head << " " << tail << " " << beg << " " << end;
     while (beg < tail) {
-      if (count + orders[beg]->number > FLAGS_pool_size)
+      if (count + orders[beg]->number > pool_size)
         break;
       count += orders[beg]->number;
       po->order_list.push_back(*orders[beg]);
@@ -213,7 +268,7 @@ void Carpooler::BatchClustering(const std::string& tag,
     
     VLOG(4) << "->" << head << " " << tail << " " << beg << " " << end;
     while (beg < end) {
-      if (count + orders[end]->number > FLAGS_pool_size)
+      if (count + orders[end]->number > pool_size)
         break;
       count += orders[end]->number;
       po->order_list.push_back(*orders[end]);
@@ -221,7 +276,7 @@ void Carpooler::BatchClustering(const std::string& tag,
     }
     
     VLOG(4) << "->" << head << " " << tail << " " << beg << " " << end;
-    if (count == FLAGS_pool_size) {
+    if (count == pool_size) {
       VLOG(4) << "find one carpool !!!";
       po->cartype = CARPOOL;
       po->__set_from_station(stations.front());
@@ -254,33 +309,6 @@ void Carpooler::BatchClustering(const std::string& tag,
 
 }
 
-
-int Carpooler::GetSubsidyPrice(const std::string& path_id) {
-  int64_t current_time = base::GetTimeInSec() ;
-  if (current_time < cache_timestamp_) {
-    if (cache_.find(path_id) != cache_.end()) {
-      return cache_[path_id];
-    }
-  } else {  // cache expire
-    cache_.clear();
-  }  
- 
-  // fetch redis
-  int subsidy_price = -1;
-  base::ReplyObj robj;
-  robj = path_rsm_.Get(path_id, "pc_price");
-  if (robj.OK()) {
-    std::string price_str(robj.Str());
-    subsidy_price = StringToInt(price_str);
-  }
-
-  // write to cache
-  if (cache_.size() == 0) {
-    cache_timestamp_ = current_time + FLAGS_subsidy_cache_expire_time; 
-  }
-  cache_[path_id] = subsidy_price;
-  return subsidy_price;
-}
 
 void Carpooler::CheckOrSubsidyOrder(const std::string& tag, int subsidy_price, 
     std::vector<Order*>& orders, std::vector<PoolOrder*>& pool_vec) {
@@ -368,6 +396,9 @@ void Carpooler::CheckOrSubsidyOrder(const std::string& tag, int subsidy_price,
 void Carpooler::SetPoolId(PoolOrder* pool_order) {
   boost::uuids::uuid id = boost::uuids::random_generator()();
   pool_order->id = boost::uuids::to_string(id);
+  
+  int64_t current_time = base::GetTimeInSec();
+  pool_order->__set_birthday(current_time);
 }
 
 void Carpooler::OutputCarpool(std::vector<PoolOrder*>& pool_vec) {

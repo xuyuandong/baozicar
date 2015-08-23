@@ -20,6 +20,10 @@ class Repacker : public Connector {
     void SetupCheckRedis(const std::string& order_rmq_name) {
       order_rmq_.Init(&this->redis_, order_rmq_name);
     }
+    
+    void SetupAssitRedis(const std::string& hd_rm_name ) {
+      history_driver_rm_.Init(&this->redis_, hd_rm_name);
+    }
 
     void SetupInputQueue(base::ConcurrentQueue<PoolOrder*>* q) {
       queue_ = q;
@@ -33,6 +37,7 @@ class Repacker : public Connector {
   private:
     base::RedisMapQueue carpool_rmq_;  // carpool map queue for planner
     base::RedisMapQueue order_rmq_;    // order map queue for checking output
+    base::RedisMap history_driver_rm_;  // poolorder id -> history pushed driver map
 
     base::ConcurrentQueue<PoolOrder*>* queue_;
 };

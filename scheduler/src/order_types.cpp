@@ -781,8 +781,13 @@ void PoolOrder::__set_to_station(const std::string& val) {
 __isset.to_station = true;
 }
 
-const char* PoolOrder::ascii_fingerprint = "6372D08A41856244DD0B4B3699C0D0FE";
-const uint8_t PoolOrder::binary_fingerprint[16] = {0x63,0x72,0xD0,0x8A,0x41,0x85,0x62,0x44,0xDD,0x0B,0x4B,0x36,0x99,0xC0,0xD0,0xFE};
+void PoolOrder::__set_birthday(const int64_t val) {
+  this->birthday = val;
+__isset.birthday = true;
+}
+
+const char* PoolOrder::ascii_fingerprint = "49FC3CAB0CC962B9B6BEC70B112EE0B5";
+const uint8_t PoolOrder::binary_fingerprint[16] = {0x49,0xFC,0x3C,0xAB,0x0C,0xC9,0x62,0xB9,0xB6,0xBE,0xC7,0x0B,0x11,0x2E,0xE0,0xB5};
 
 uint32_t PoolOrder::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -908,6 +913,14 @@ uint32_t PoolOrder::read(::apache::thrift::protocol::TProtocol* iprot) {
           xfer += iprot->skip(ftype);
         }
         break;
+      case 11:
+        if (ftype == ::apache::thrift::protocol::T_I64) {
+          xfer += iprot->readI64(this->birthday);
+          this->__isset.birthday = true;
+        } else {
+          xfer += iprot->skip(ftype);
+        }
+        break;
       default:
         xfer += iprot->skip(ftype);
         break;
@@ -983,6 +996,11 @@ uint32_t PoolOrder::write(::apache::thrift::protocol::TProtocol* oprot) const {
     xfer += oprot->writeString(this->to_station);
     xfer += oprot->writeFieldEnd();
   }
+  if (this->__isset.birthday) {
+    xfer += oprot->writeFieldBegin("birthday", ::apache::thrift::protocol::T_I64, 11);
+    xfer += oprot->writeI64(this->birthday);
+    xfer += oprot->writeFieldEnd();
+  }
   xfer += oprot->writeFieldStop();
   xfer += oprot->writeStructEnd();
   oprot->decrementRecursionDepth();
@@ -1001,6 +1019,7 @@ void swap(PoolOrder &a, PoolOrder &b) {
   swap(a.number, b.number);
   swap(a.from_station, b.from_station);
   swap(a.to_station, b.to_station);
+  swap(a.birthday, b.birthday);
   swap(a.__isset, b.__isset);
 }
 
@@ -1015,6 +1034,7 @@ PoolOrder::PoolOrder(const PoolOrder& other27) {
   number = other27.number;
   from_station = other27.from_station;
   to_station = other27.to_station;
+  birthday = other27.birthday;
   __isset = other27.__isset;
 }
 PoolOrder& PoolOrder::operator=(const PoolOrder& other28) {
@@ -1028,6 +1048,7 @@ PoolOrder& PoolOrder::operator=(const PoolOrder& other28) {
   number = other28.number;
   from_station = other28.from_station;
   to_station = other28.to_station;
+  birthday = other28.birthday;
   __isset = other28.__isset;
   return *this;
 }
@@ -1044,6 +1065,7 @@ std::ostream& operator<<(std::ostream& out, const PoolOrder& obj) {
   out << ", " << "number=" << to_string(obj.number);
   out << ", " << "from_station="; (obj.__isset.from_station ? (out << to_string(obj.from_station)) : (out << "<null>"));
   out << ", " << "to_station="; (obj.__isset.to_station ? (out << to_string(obj.to_station)) : (out << "<null>"));
+  out << ", " << "birthday="; (obj.__isset.birthday ? (out << to_string(obj.birthday)) : (out << "<null>"));
   out << ")";
   return out;
 }

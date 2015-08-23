@@ -19,14 +19,18 @@ def uuid(phone):
   ret = '%s%03s%05s%06s%04s'%(y,d,s, t.microsecond, r)
   return int(ret.replace(' ', '0'))
 
-def test(phone, person):
+def test(phone, person, lat, lng):
   r = redis.StrictRedis(host='localhost',port=6379)
     
   path = Path()
-  path.from_city = 'shenzhen'
-  path.from_place ='tengxundasha'
-  path.to_city = 'guangzhou'
-  path.to_place = 'guangzhouzhan'
+  path.to_city = '廊坊'
+  path.from_place ='傻逼酒吧'
+  path.from_city = '北京'
+  path.to_place = '傻逼KTV'
+  path.from_lat = lat
+  path.from_lng = lng 
+  path.to_lat = 116
+  path.to_lng = 40
 
   order = Order()
   order.id = uuid(phone)
@@ -41,23 +45,8 @@ def test(phone, person):
   r.hset('h_order', order.id, thrift_obj)
   r.lpush('l_order', order.id)
 
-  return
-  codestr = r.hget('h_order', "ef288158a7f811e4be5060e4001bc96")
-  print len(codestr), codestr
-  neworder = Order()
-  neworder = deserialize(neworder, codestr)
-  print neworder.id
-  print neworder.number
-  print neworder.phone
 
 
 if __name__ == '__main__':
-  test('18910060009', 3)
-  test('18910060001', 2)
-  test('18910060002', 3)
-  test('18910060003', 1)
-  test('18910060004', 1)
-  test('12341240007', 3)
-  test('12341240008', 2)
-  test('12341240006', 1)
-  test('12341240005', 2)
+  test('18810308350', 2, 39.863697, 116.428565)
+  #test('18810308350', 2, 39.871575, 116.465751)

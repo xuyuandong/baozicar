@@ -38,12 +38,19 @@ class UserLoginHandler(BaseHandler):
 
   @tornado.web.asynchronous
   @tornado.gen.coroutine
-  #def get(self):
   def post(self):
     phone = self.get_argument("phone")
     authcode = self.get_argument("authcode")
     dev_id = self.get_argument("dev_id")
     push_id = self.get_argument('push_id')
+
+    os = '-'
+    version = '-'
+    try:
+      os = self.get_argument('os')
+      version = self.get_argument('version')
+    except Exception, e:
+      app_log.info('old user version, no os/version arguments')
 
     name = self.get_argument('name')
     gender = self.get_argument('gender')
@@ -52,21 +59,21 @@ class UserLoginHandler(BaseHandler):
 
     # check authcode
     if authcode != self.r.get(options.authcode_rpf + phone):
-      #self.write({"status_code":201, "error_msg":"auth code error"})
+      app_log.info('{"status_code":201, "error_msg":"auth code error"}')
       self.write({"status_code":201, "error_msg":u"验证码错误"})
       return
 
-    # unique user profile mapping: phone -> (device, push_id)
+    # unique user profile mapping: phone -> (device, push_id, type)
     rkey = options.login_rpf + phone
-    rval = self.r.get(rkey)
-    
-    if rval is None \
-      or dev_id != self.r.hget(rkey, 'device') \
-      or push_id != self.r.hget(rkey, 'push') \
-      or str(LoginType.user) != self.r.hget(rkey, 't'):
+    dobj = self.r.hgetall(rkey)
+    rexist = (dobj is None) or (len(dobj) < 3)
+
+    # first login bind and set map
+    if (rexist) or (dev_id != dobj['device']) or (push_id != dobj['push']) \
+        or (LoginType.user != int(dobj['t'])):
       # async bind push_id
       if not ( yield self.async_bind(phone, push_id) ):
-        #self.write({"status_code":201, "error_msg":"bind push_id error"})
+        app_log.info('{"status_code":201, "error_msg":"bind push_id error"}')
         self.write({"status_code":201, "error_msg":u"未能绑定消息推送"})
         return
 
@@ -74,8 +81,11 @@ class UserLoginHandler(BaseHandler):
       self.r.hmset(rkey, {'device':dev_id, 'push':push_id, 'name':name, 't':LoginType.user})
 
     # process logic for first time login
-    if rval is None:
-      self.first_login_reward(phone, dev_id, name)
+    if rexist:
+      self.first_login_reward(phone, dev_id, name, os, version)
+
+    # update os, version
+    self.update_user_info(phone, dev_id, os, version)
 
     # return token
     token = self.set_secure_cookie(options.token_key, phone)
@@ -87,27 +97,28 @@ class UserLoginHandler(BaseHandler):
     ret2 = self.push.user.bindAlias(phone, push_id)
     return (ret2['result'].upper() == 'OK')
 
-  def first_login_reward(self, phone, dev_id, name):
+  def first_login_reward(self, phone, dev_id, name, os, version):
     table = 'cardb.t_user'
     sql = "select id from %s where phone='%s' limit 1"%(table, phone)
     obj = self.db.get(sql)
 
     # not first time login
     if obj is not None:
-      return
+      return False
 
     # insert into mysql
-    sql = "insert into %s (phone, dev, name, image)\
-        values ('%s', '%s', '%s', '')"%(table, phone, dev_id, name)
+    sql = "insert into %s (phone, dev, name, image, os, version)\
+        values ('%s', '%s', '%s', '', '%s', '%s')"\
+        %(table, phone, dev_id, name, os, version)
     self.db.execute(sql)
 
-    # reward a coupon
     deadline = datetime.datetime.now() + datetime.timedelta(days = 30)
+    # reward a normal coupon
     coupon = {'ctype': -1,
-        'price': 15,
+        'price': 5,
         'within': 0,
         'deadline': deadline.strftime('%Y-%m-%d'),
-        'note': u'首次乘车奖励'}
+        'note': u'新用户乘车优惠'}
     coupon_id = base.uuid(phone)
 
     table = 'cardb.t_coupon'
@@ -116,6 +127,35 @@ class UserLoginHandler(BaseHandler):
         %(table, coupon_id, coupon['ctype'], CouponStatus.normal, \
         coupon['price'], coupon['within'], coupon['deadline'], coupon['note'], phone, 0)
     self.db.execute(sql)
+   
+    # reward a fixed-price coupon
+    coupon = {'ctype': -2,
+        'price': 5,
+        'within': 0,
+        'deadline': deadline.strftime('%Y-%m-%d'),
+        'note': u'首单拼车通乘券'}
+    coupon_id = base.uuid(phone)
+
+    table = 'cardb.t_coupon'
+    sql = "insert into %s (id, ctype, status, price, within, deadline, note, phone, code, dt) \
+        values(%s, %s, %s, %s, %s, '%s', '%s', '%s', %s, null)" \
+        %(table, coupon_id, coupon['ctype'], CouponStatus.normal, \
+        coupon['price'], coupon['within'], coupon['deadline'], coupon['note'], phone, 0)
+    self.db.execute(sql)
+
+    # result
+    return True
+
+  def update_user_info(self, phone, dev_id, os, version):
+    table = 'cardb.t_user'
+    sql = "select os, version from %s where phone='%s' limit 1"%(table, phone)
+    obj = self.db.get(sql)
+
+    if (obj is not None): # and (obj.os != os or obj.version != version):
+      current_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+      sql = "update %s set dev='%s', os='%s', version='%s', dt='%s' \
+      where phone='%s'"%(table, dev_id, os, version, current_time, phone)
+      self.db.execute(sql)
 
 
 
@@ -164,34 +204,6 @@ class GetCouponListHandler(BaseHandler):
         "coupon_infos": clist
         }
     self.write(msg)
-
-
-# /select_coupon
-class SelectCouponHandler(BaseHandler):
-  @base.authenticated
-  #def get(self):
-  def post(self):
-    order_id = self.get_argument('order_id')
-    coupon_id = self.get_argument('coupon_id')
-    coupon_price = self.get_argument('coupon_price')
-
-    table = 'cardb.t_coupon'
-    sql = "select status from %s where id=%s limit 1"%(table, coupon_id)
-    obj = self.db.get(sql)
-
-    if obj is None or obj.status != CouponStatus.normal:
-      self.write({'status_code':201, 'error_msg':'The coupon is invalid'})
-      return
-
-    sql = "update %s set status=%s where id=%s"%(table, CouponStatus.locked, coupon_id)
-    self.db.execute(sql)
-
-    table = 'cardb.t_order'
-    sql = "update %s set coupon_id=%s, coupon_price=%s \
-        where id=%s"%(table, coupon_id, coupon_price, order_id)
-    self.db.execute(sql)
-
-    self.write({'status_code':200, 'error_msg':''})
 
 
 # /exchange_coupon
@@ -268,158 +280,6 @@ class ExchangeCouponHandler(BaseHandler):
     self.write(msg)
 
 
-# ========================================
-# user order
-
-# /submit_order
-class SubmitOrderHandler(BaseHandler):
-  @base.authenticated
-  #def get(self):
-  def post(self):
-    phone = self.current_user
-
-    order_type = self.get_argument("order_type")
-
-    from_city = self.get_argument("from_city")
-    from_place = self.get_argument("from_place")
-    to_city = self.get_argument("to_city")
-    to_place = self.get_argument("to_place")
-
-    name = self.get_argument("name")
-    person_num = self.get_argument("person_num")
-    price = self.get_argument("total_price")
-
-    from_lat = self.get_argument('from_lat')
-    from_lng = self.get_argument('from_lng')
-    to_lat = self.get_argument('to_lat')
-    to_lng = self.get_argument('to_lng')
-
-    pay_id = 0 #self.get_argument('pay_id')
-    fact_price = 0 #self.get_argument("fact_price")
-    coupon_id = 0 #self.get_argument("coupon_id")
-    coupon_price = 0 #self.get_argument("coupon_price")
-
-    # special car argument
-    extra_msg = ''
-    start_time = ''
-    if int(order_type) == OrderType.special:
-      extra_msg = self.get_argument('extra_msg')
-      start_time = self.get_argument('start_time')
-
-    # check conflict
-    table = 'cardb.t_order'
-    sql = "select order_type, status, dt from %s where \
-        phone='%s' and status<%s"%(table, phone, OrderStatus.toeval)
-    anylist = self.db.query(sql)
-    if anylist is not None and len(anylist) > 0:
-      self.write({'status_code':201, 
-        'error_msg':u'亲，您有未完成的订单哦，请待完成后再预约新的订单~'})
-      return
-    
-    # insert into mysql db
-    order_id = base.uuid(phone)
-    sql = "insert into %s (id, order_type, status, phone, name, start_time,\
-           from_city, from_place, to_city, to_place, num, msg,\
-           pay_id, price, fact_price, coupon_id, coupon_price, \
-           from_lat, from_lng, to_lat, to_lng, dt) \
-           values(%s, %s, %s, '%s', '%s', '%s', '%s', '%s', '%s', '%s',\
-           %s, '%s', %s, %s, %s, '%s', %s, %s, %s, %s, %s, null)"\
-           %(table, order_id, order_type, OrderStatus.notpay, phone, name, start_time,
-               from_city, from_place, to_city, to_place, person_num, extra_msg,
-               pay_id, price, fact_price, coupon_id, coupon_price,
-               from_lat, from_lng, to_lat, to_lng)
-    self.db.execute(sql)
-
-    # return result
-    msg = {'status_code':200,
-           'error_msg':'',
-           'order_id':order_id
-           }
-    self.write(msg)
-
-
-# /cancel_order
-class CancelOrderHandler(BaseHandler):
-  @base.authenticated
-  #def get(self):
-  def post(self):
-    order_id = self.get_argument("order_id")
-
-    # if order notpay, discard
-    if self.__discard_notpay_order(order_id):
-      self.write({'status_code':200, 'error_msg':''})
-      return
-
-    # try cancel payed order
-    ret = order_util.CancelOrder(self.r, order_id)
-
-    if ret == 1: # success
-      # will not send a canceled message, when driver confirm, get a canceled result
-      table = 'cardb.t_order'
-      sql = "update %s set status=%s where id=%s"%(table, OrderStatus.cancel, order_id)
-      self.db.execute(sql)
-
-      # get coupon_id
-      sql = "select coupon_id from %s where id=%s limit 1"%(table, order_id)
-      obj = self.db.get(sql)
-      coupon_id = obj.coupon_id
-
-      # restore coupon_id status
-      if coupon_id != 0:
-        table = 'cardb.t_coupon'
-        sql = "update %s set status=%s where id=%s"%(table, CouponStatus.normal, coupon_id)
-        self.db.execute(sql)
-
-      self.write({'status_code':200, 'error_msg':''})
-    else:
-      #self.write({'status_code':201, 'error_msg':'failed to cancel'})
-      self.write({'status_code':201, 'error_msg':u'您的订单已经被司机接单了，取消失败，请联系客服'})
-
-  def __discard_notpay_order(self, order_id):
-    table = 'cardb.t_order'
-    sql = "select status, coupon_id from %s where id=%s limit 1"%(table, order_id)
-    obj = self.db.get(sql)
-
-    if obj.status != OrderStatus.notpay:
-      return False
-
-    sql = "update %s set status=%s where id=%s"%(table, OrderStatus.discard, order_id)
-    self.db.execute(sql)
-
-    if obj.coupon_id != 0:
-      table = 'cardb.t_coupon'
-      sql = "update %s set status=%s where id=%s"%(table, CouponStatus.normal, coupon_id)
-      self.db.execute(sql)
-
-    return True
-
-
-
-# /read_confirmed_order
-class ReadConfirmedOrderHandler(BaseHandler):
-  @base.authenticated
-  #def get(self):
-  def post(self): # TODO: check api
-    driver = self.get_argument('driver_phone')
-    order_id = self.get_argument('order_id')
-    is_confirm = self.get_argument('is_confirm')
-
-    table = 'cardb.t_driver'
-    sql = "select name, carno from %s where phone='%s' limit 1"%(table, driver)
-    obj = self.db.get(sql)
-
-    msg = {
-        'status_code':200,
-        'error_msg': '',
-        'driver_phone': driver,
-        'driver_name': obj.name,
-        'driver_carno': obj.carno,
-        'order_id': int(order_id),
-        'is_confirm': int(is_confirm)
-        }
-    self.write(msg)
-
-
 # ===================================================
 
 # /get_order_list
@@ -450,7 +310,7 @@ class GetOrderListHandler(BaseHandler):
     condition = typefilter.get(int(oltype))
 
     # select orders
-    sql = "select id, order_type, status, start_time,\
+    sql = "select id, order_type, status, start_time, num, \
         from_city, from_place, to_city, to_place, price, coupon_price,\
         dt from %s where phone='%s' %s"%(table, phone, condition)
     try:
@@ -466,6 +326,7 @@ class GetOrderListHandler(BaseHandler):
       'order_type':obj.order_type,
       'order_status':obj.status,
       'start_time':obj.start_time,
+      'person_num':obj.num,
       'from_city':obj.from_city,
       'from_place':obj.from_place,
       'to_city':obj.to_city,

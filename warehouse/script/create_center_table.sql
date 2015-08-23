@@ -24,6 +24,11 @@ CREATE TABLE IF NOT EXISTS t_path (
   PRIMARY KEY (id)
 ) ENGINE=InnoDB;
 
+alter table t_path add maxmile INT(4) not null default 0;
+alter table t_path add maxnum  INT(2) not null default 3;
+alter table t_path add feed    INT(4) not null default 0;
+alter table t_path add subsidy INT(4) not null default 0;
+
 
 CREATE TABLE IF NOT EXISTS t_feedback (
   id          INT(10) NOT NULL AUTO_INCREMENT,

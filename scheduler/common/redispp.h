@@ -114,6 +114,7 @@ class RedisLock {
     }
 };
 
+
 class RedisMap {
   public:
     RedisMap() : r_(NULL) {}
@@ -152,6 +153,31 @@ class RedisMap {
     Redispp* r_;
     std::string hn_;
 };
+
+
+class RedisSet {
+  public:
+    RedisSet() : r_(NULL) {}
+    void Init(Redispp* r, const std::string& name) {
+      r_ = r;
+      sp_ = name + "_";
+    }
+
+    redisReply* GetAll(const std::string& key) {
+      std::string skey = sp_ + key;
+      redisReply* p = r_->execute("SMEMBERS %b", skey.c_str(), skey.size());
+      if (p->type == REDIS_REPLY_NIL) {
+        freeReplyObject(p);
+        return NULL;
+      }
+      return p;
+    }
+  
+  private:
+    Redispp* r_;
+    std::string sp_;
+};
+
 
 class RedisStructMap {
   public:
